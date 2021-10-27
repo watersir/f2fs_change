@@ -408,13 +408,13 @@ static int gc_node_segment(struct f2fs_sb_info *sbi,
 	block_t start_addr;
 	int off;
 
-	start_addr = START_BLOCK(sbi, segno);
-
+	start_addr = START_BLOCK(sbi, segno); // start logical block address.
+	printk(KERN_EMERG "in gc_node_segment, start_addr:%x,sbi->blocks_per_seg:%d\n",start_addr,sbi->blocks_per_seg); 
 next_step:
 	entry = sum;
 
 	for (off = 0; off < sbi->blocks_per_seg; off++, entry++) {
-		nid_t nid = le32_to_cpu(entry->nid);
+		nid_t nid = le32_to_cpu(entry->nid); 
 		struct page *node_page;
 		struct node_info ni;
 
@@ -426,20 +426,21 @@ next_step:
 			continue;
 
 		if (initial) {
-			ra_node_page(sbi, nid);//将这个nid对应的node page读入到内存当中
+			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
 			continue;
 		}
-		node_page = get_node_page(sbi, nid);
+		//
+		node_page = get_node_page_gc(sbi, nid); // This function or the ra_node_page is used to read page.
 		if (IS_ERR(node_page))
 			continue;
 
 		/* block may become invalid during get_node_page */
-		if (check_valid_map(sbi, segno, off) == 0) {
+		if (check_valid_map(sbi, segno, off) == 0) { // Why block may become invalid?
 			f2fs_put_page(node_page, 1);
 			continue;
 		}
 
-		get_node_info(sbi, nid, &ni);
+		get_node_info(sbi, nid, &ni); 
 		if (ni.blk_addr != start_addr + off) {
 			f2fs_put_page(node_page, 1);
 			continue;
@@ -448,7 +449,7 @@ next_step:
 		/* set page dirty and write it */
 		if (gc_type == FG_GC) {
 			f2fs_wait_on_page_writeback(node_page, NODE);
-			set_page_dirty(node_page);
+			set_page_dirty(node_page); // This page is dirty.
 		} else {
 			if (!PageWriteback(node_page))
 				set_page_dirty(node_page);
@@ -468,7 +469,7 @@ next_step:
 			.nr_to_write = LONG_MAX,
 			.for_reclaim = 0,
 		};
-		sync_node_pages(sbi, 0, &wbc);
+		sync_node_pages(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
 
 		/* return 1 only if FG_GC succefully reclaimed one */
 		if (get_valid_blocks(sbi, segno, 1) == 0)
@@ -628,12 +629,12 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 {
 	struct page *page;
 
-	page = get_lock_data_page(inode, bidx, true);
+	page = get_lock_data_page_gc(inode, bidx, true); // This time to get the block_t of the index.
 	if (IS_ERR(page))
 		return;
 
 	if (gc_type == BG_GC) {
-		if (PageWriteback(page))
+		if (PageWriteback(page)) // Don't know what to do?
 			goto out;
 		set_page_dirty(page);
 		set_cold_data(page);
@@ -653,6 +654,8 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 		do_write_data_page(&fio);
 		clear_cold_data(page);
 	}
+	// get the bloct_t of the inode and the bidx.
+
 out:
 	f2fs_put_page(page, 1);
 }
@@ -674,7 +677,7 @@ static int gc_data_segment(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 	int phase = 0;
 
 	start_addr = START_BLOCK(sbi, segno);
-
+	printk(KERN_EMERG "in gc_data_segment, start_addr:%x,sbi->blocks_per_seg:%d\n",start_addr,sbi->blocks_per_seg); 
 next_step:
 	entry = sum;
 
@@ -698,7 +701,7 @@ next_step:
 		}
 
 		/* Get an inode by ino with checking validity */
-		if (!is_alive(sbi, entry, &dni, start_addr + off, &nofs))
+		if (!is_alive(sbi, entry, &dni, start_addr + off, &nofs)) // get ino number by reading NAT.
 			continue;
 
 		if (phase == 1) {
@@ -706,10 +709,10 @@ next_step:
 			continue;
 		}
 
-		ofs_in_node = le16_to_cpu(entry->ofs_in_node);
+		ofs_in_node = le16_to_cpu(entry->ofs_in_node); // the offset in the dnode.
 
 		if (phase == 2) {
-			inode = f2fs_iget(sb, dni.ino); // get the inode , which is in the cache. ???
+			inode = f2fs_iget(sb, dni.ino); // get the inode(already in page cache) , which is in the cache. ???
 			if (IS_ERR(inode) || is_bad_inode(inode))
 				continue;
 
@@ -721,16 +724,16 @@ next_step:
 			}
 
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
-			data_page = get_read_data_page(inode, // read the data page.
-					start_bidx + ofs_in_node, READA, true);
-			if (IS_ERR(data_page)) {
-				iput(inode);
-				continue;
-			} else {
-				// need to write something?
-			}
+			// First, record the block number of the page.
+			data_page = get_read_data_page_gc(inode, 
+					start_bidx + ofs_in_node, READA, true,1); // read the block in data_page.
 
-			f2fs_put_page(data_page, 0);
+			if (IS_ERR(data_page)) {
+				iput(inode); // The function is used to reduce the usage count of inode.
+				continue;
+			} 
+
+			f2fs_put_page(data_page, 0); // What is the meaning of page cache release?
 			add_gc_inode(gc_list, inode);
 			continue;
 		}

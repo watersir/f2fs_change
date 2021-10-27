@@ -1013,7 +1013,7 @@ static int read_node_page(struct page *page, int rw)
 		.encrypted_page = NULL,
 	};
 
-	get_node_info(sbi, page->index, &ni);
+	get_node_info(sbi, page->index, &ni); // what is the relation ship between them?
 
 	if (unlikely(ni.blk_addr == NULL_ADDR)) {
 		ClearPageUptodate(page);
@@ -1026,7 +1026,33 @@ static int read_node_page(struct page *page, int rw)
 	fio.blk_addr = ni.blk_addr;
 	return f2fs_submit_page_bio(&fio);
 }
+static int read_node_page_gc(struct page *page, int rw)
+{
+	struct f2fs_sb_info *sbi = F2FS_P_SB(page);
+	struct node_info ni;
+	struct f2fs_io_info fio = {
+		.sbi = sbi,
+		.type = NODE,
+		.rw = rw,
+		.page = page,
+		.encrypted_page = NULL,
+	};
 
+	get_node_info(sbi, page->index, &ni); // what is the relation ship between them?
+
+	if (unlikely(ni.blk_addr == NULL_ADDR)) {
+		ClearPageUptodate(page);
+		return -ENOENT;
+	}
+
+	if (PageUptodate(page))
+		return LOCKED_PAGE;
+
+	fio.blk_addr = ni.blk_addr;
+	int is_original = 1;
+	printk(KERN_EMERG "%d %x\n",is_original,fio.blk_addr); 
+	return f2fs_submit_page_bio(&fio);
+}
 /*
  * Readahead a node page
  */
@@ -1046,20 +1072,38 @@ void ra_node_page(struct f2fs_sb_info *sbi, nid_t nid)
 	if (!apage)
 		return;
 
-	err = read_node_page(apage, READA);
+	err = read_node_page_gc(apage, READA);
 	f2fs_put_page(apage, err ? 1 : 0);
 }
+void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
+{
+	struct page *apage;
+	int err;
 
+	apage = find_get_page(NODE_MAPPING(sbi), nid);
+	if (apage && PageUptodate(apage)) {
+		f2fs_put_page(apage, 0);
+		return;
+	}
+	f2fs_put_page(apage, 0);
+
+	apage = grab_cache_page(NODE_MAPPING(sbi), nid);
+	if (!apage)
+		return;
+
+	err = read_node_page_gc(apage, READA);
+	f2fs_put_page(apage, err ? 1 : 0);
+}
 struct page *get_node_page(struct f2fs_sb_info *sbi, pgoff_t nid)
 {
 	struct page *page;
 	int err;
 repeat:
-	page = grab_cache_page(NODE_MAPPING(sbi), nid);
+	page = grab_cache_page(NODE_MAPPING(sbi), nid); // root inode 对应的？
 	if (!page)
 		return ERR_PTR(-ENOMEM);
 
-	err = read_node_page(page, READ_SYNC);
+	err = read_node_page(page, READ_SYNC); // This function read node page.
 	if (err < 0) {
 		f2fs_put_page(page, 1);
 		return ERR_PTR(err);
@@ -1078,7 +1122,34 @@ repeat:
 	}
 	return page;
 }
+struct page *get_node_page_gc(struct f2fs_sb_info *sbi, pgoff_t nid)
+{
+	struct page *page;
+	int err;
+repeat:
+	page = grab_cache_page(NODE_MAPPING(sbi), nid); // root inode 对应的？
+	if (!page)
+		return ERR_PTR(-ENOMEM);
 
+	err = read_node_page_gc(page, READ_SYNC); // This function read node page.
+	if (err < 0) {
+		f2fs_put_page(page, 1);
+		return ERR_PTR(err);
+	} else if (err != LOCKED_PAGE) {
+		lock_page(page);
+	}
+
+	if (unlikely(!PageUptodate(page) || nid != nid_of_node(page))) {
+		ClearPageUptodate(page);
+		f2fs_put_page(page, 1);
+		return ERR_PTR(-EIO);
+	}
+	if (unlikely(page->mapping != NODE_MAPPING(sbi))) {
+		f2fs_put_page(page, 1);
+		goto repeat;
+	}
+	return page;
+}
 /*
  * Return a locked page for the desired node page.
  * And, readahead MAX_RA_NODE number of node pages.

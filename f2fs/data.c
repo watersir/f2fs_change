@@ -303,7 +303,7 @@ struct page *get_read_data_page(struct inode *inode, pgoff_t index,
 	}
 
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
-	err = get_dnode_of_data(&dn, index, LOOKUP_NODE);
+	err = get_dnode_of_data(&dn, index, LOOKUP_NODE); // This is to give a new dnode to original block.
 	if (err)
 		goto put_err;
 	f2fs_put_dnode(&dn);
@@ -333,16 +333,87 @@ got_it:
 
 	fio.blk_addr = dn.data_blkaddr;
 	fio.page = page;
-	err = f2fs_submit_page_bio(&fio);
+	err = f2fs_submit_page_bio(&fio); // What happend when submit page bio, when it return, will the page be filled with data?
 	if (err)
 		goto put_err;
+	// There will be, but don't know wheather is for GC.
+	
 	return page;
 
 put_err:
 	f2fs_put_page(page, 1);
 	return ERR_PTR(err);
 }
+struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
+						int rw, bool for_write, int is_original) // The last one means the original or the new block_t.
+{
+	struct address_space *mapping = inode->i_mapping;
+	struct dnode_of_data dn;
+	struct page *page;
+	struct extent_info ei;
+	int err;
+	struct f2fs_io_info fio = {
+		.sbi = F2FS_I_SB(inode),
+		.type = DATA,
+		.rw = rw,
+		.encrypted_page = NULL,
+	};
 
+	if (f2fs_encrypted_inode(inode) && S_ISREG(inode->i_mode))
+		return read_mapping_page(mapping, index, NULL); // by index and mapping, read in the radix tree.
+
+	page = f2fs_grab_cache_page(mapping, index, for_write);
+	if (!page)
+		return ERR_PTR(-ENOMEM);
+
+	if (f2fs_lookup_extent_cache(inode, index, &ei)) { // if the page in the extent cache.
+		dn.data_blkaddr = ei.blk + index - ei.fofs;
+		goto got_it;
+	}
+
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	err = get_dnode_of_data(&dn, index, LOOKUP_NODE);
+	if (err)
+		goto put_err;
+	f2fs_put_dnode(&dn);
+
+	if (unlikely(dn.data_blkaddr == NULL_ADDR)) {
+		err = -ENOENT;
+		goto put_err;
+	}
+got_it:
+	if (PageUptodate(page)) {
+		unlock_page(page);
+		return page;
+	}
+
+	/*
+	 * A new dentry page is allocated but not able to be written, since its
+	 * new inode page couldn't be allocated due to -ENOSPC.
+	 * In such the case, its blkaddr can be remained as NEW_ADDR.
+	 * see, f2fs_add_link -> get_new_data_page -> init_inode_metadata.
+	 */
+	if (dn.data_blkaddr == NEW_ADDR) {
+		printk(KERN_EMERG "%d NEW_ADDR\n",is_original); 
+		zero_user_segment(page, 0, PAGE_CACHE_SIZE);
+		SetPageUptodate(page);
+		unlock_page(page);
+		return page;
+	}
+
+	fio.blk_addr = dn.data_blkaddr;
+	fio.page = page;
+	err = f2fs_submit_page_bio(&fio); // What happend when submit page bio, when it return, will the page be filled with data?
+	if (err)
+		goto put_err;
+	// There will be, but don't know wheather is for GC.
+	printk(KERN_EMERG "%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+	return page;
+
+put_err:
+	f2fs_put_page(page, 1);
+	return ERR_PTR(err);
+}
 struct page *find_data_page(struct inode *inode, pgoff_t index)
 {
 	struct address_space *mapping = inode->i_mapping;
@@ -379,7 +450,7 @@ struct page *get_lock_data_page(struct inode *inode, pgoff_t index,
 	struct address_space *mapping = inode->i_mapping;
 	struct page *page;
 repeat:
-	page = get_read_data_page(inode, index, READ_SYNC, for_write);
+	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,0);
 	if (IS_ERR(page))
 		return page;
 
@@ -395,7 +466,28 @@ repeat:
 	}
 	return page;
 }
+struct page *get_lock_data_page_gc(struct inode *inode, pgoff_t index,
+							bool for_write)
+{
+	struct address_space *mapping = inode->i_mapping;
+	struct page *page;
+repeat:
+	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,1);
+	if (IS_ERR(page))
+		return page;
 
+	/* wait for read completion */
+	lock_page(page);
+	if (unlikely(!PageUptodate(page))) {
+		f2fs_put_page(page, 1);
+		return ERR_PTR(-EIO);
+	}
+	if (unlikely(page->mapping != mapping)) {
+		f2fs_put_page(page, 1);
+		goto repeat;
+	}
+	return page;
+}
 /*
  * Caller ensures that this data page is never allocated.
  * A new zero-filled data page is allocated in the page cache.

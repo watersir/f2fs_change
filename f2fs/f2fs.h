@@ -904,7 +904,7 @@ static inline struct address_space *META_MAPPING(struct f2fs_sb_info *sbi)
 
 static inline struct address_space *NODE_MAPPING(struct f2fs_sb_info *sbi)
 {
-	return sbi->node_inode->i_mapping;
+	return sbi->node_inode->i_mapping; // address space. 
 }
 
 static inline bool is_sbi_flag_set(struct f2fs_sb_info *sbi, unsigned int type)
@@ -1261,7 +1261,7 @@ static inline void f2fs_put_page(struct page *page, int unlock)
 		f2fs_bug_on(F2FS_P_SB(page), !PageLocked(page));
 		unlock_page(page);
 	}
-	page_cache_release(page);
+	page_cache_release(page); 
 }
 
 static inline void f2fs_put_dnode(struct dnode_of_data *dn)
@@ -1743,7 +1743,9 @@ int remove_inode_page(struct inode *);
 struct page *new_inode_page(struct inode *);
 struct page *new_node_page(struct dnode_of_data *, unsigned int, struct page *);
 void ra_node_page(struct f2fs_sb_info *, nid_t);
+void ra_node_page_gc(struct f2fs_sb_info *, nid_t);
 struct page *get_node_page(struct f2fs_sb_info *, pgoff_t);
+struct page *get_node_page_gc(struct f2fs_sb_info *, pgoff_t);
 struct page *get_node_page_ra(struct page *, int);
 void sync_inode_page(struct dnode_of_data *);
 int sync_node_pages(struct f2fs_sb_info *, nid_t, struct writeback_control *);
@@ -1843,8 +1845,10 @@ int reserve_new_block(struct dnode_of_data *);
 int f2fs_get_block(struct dnode_of_data *, pgoff_t);
 int f2fs_reserve_block(struct dnode_of_data *, pgoff_t);
 struct page *get_read_data_page(struct inode *, pgoff_t, int, bool);
+struct page *get_read_data_page_gc(struct inode *, pgoff_t, int, bool, int);
 struct page *find_data_page(struct inode *, pgoff_t);
 struct page *get_lock_data_page(struct inode *, pgoff_t, bool);
+struct page *get_lock_data_page_gc(struct inode *, pgoff_t, bool);
 struct page *get_new_data_page(struct inode *, struct page *, pgoff_t, bool);
 int do_write_data_page(struct f2fs_io_info *);
 int f2fs_fiemap(struct inode *inode, struct fiemap_extent_info *, u64, u64);
