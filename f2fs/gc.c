@@ -689,11 +689,11 @@ next_step:
 		if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0))
 			return 0;
 
-		if (check_valid_map(sbi, segno, off) == 0)
+		if (check_valid_map(sbi, segno, off) == 0) // check if the block is valid.
 			continue;
 
 		if (phase == 0) {
-			ra_node_page(sbi, le32_to_cpu(entry->nid));
+			ra_node_page(sbi, le32_to_cpu(entry->nid)); // read the node page of the moving block.
 			continue;
 		}
 
@@ -702,18 +702,18 @@ next_step:
 			continue;
 
 		if (phase == 1) {
-			ra_node_page(sbi, dni.ino);
+			ra_node_page(sbi, dni.ino); // read the inode of the moving block.
 			continue;
 		}
 
 		ofs_in_node = le16_to_cpu(entry->ofs_in_node);
 
 		if (phase == 2) {
-			inode = f2fs_iget(sb, dni.ino);
+			inode = f2fs_iget(sb, dni.ino); // get the inode , which is in the cache. ???
 			if (IS_ERR(inode) || is_bad_inode(inode))
 				continue;
 
-			/* if encrypted inode, let's go phase 3 */
+			/* if encrypted（加密的） inode, let's go phase 3 */
 			if (f2fs_encrypted_inode(inode) &&
 						S_ISREG(inode->i_mode)) {
 				add_gc_inode(gc_list, inode);
@@ -721,11 +721,13 @@ next_step:
 			}
 
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
-			data_page = get_read_data_page(inode,
+			data_page = get_read_data_page(inode, // read the data page.
 					start_bidx + ofs_in_node, READA, true);
 			if (IS_ERR(data_page)) {
 				iput(inode);
 				continue;
+			} else {
+				// need to write something?
 			}
 
 			f2fs_put_page(data_page, 0);
@@ -741,7 +743,7 @@ next_step:
 			if (f2fs_encrypted_inode(inode) && S_ISREG(inode->i_mode))
 				move_encrypted_block(inode, start_bidx);
 			else
-				move_data_page(inode, start_bidx, gc_type);
+				move_data_page(inode, start_bidx, gc_type); // write data to ?
 			stat_inc_data_blk_count(sbi, 1, gc_type);
 		}
 	}
