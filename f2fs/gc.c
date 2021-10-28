@@ -637,7 +637,7 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 		if (PageWriteback(page)) // Don't know what to do?
 			goto out;
 		set_page_dirty(page);
-		set_cold_data(page);
+		set_cold_data(page); // Background GC will not write the page back immediately.
 	} else {
 		struct f2fs_io_info fio = {
 			.sbi = F2FS_I_SB(inode),
@@ -651,7 +651,7 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 		if (clear_page_dirty_for_io(page))
 			inode_dec_dirty_pages(inode);
 		set_cold_data(page);
-		do_write_data_page(&fio);
+		do_write_data_page_gc(&fio); // This time to write data page. Know the new logical address.
 		clear_cold_data(page);
 	}
 	// get the bloct_t of the inode and the bidx.

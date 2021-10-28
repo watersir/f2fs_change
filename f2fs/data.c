@@ -372,7 +372,7 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 	}
 
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
-	err = get_dnode_of_data(&dn, index, LOOKUP_NODE);
+	err = get_dnode_of_data(&dn, index, LOOKUP_NODE); // get the data_blkaddr of the block.
 	if (err)
 		goto put_err;
 	f2fs_put_dnode(&dn);
@@ -384,6 +384,7 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 got_it:
 	if (PageUptodate(page)) {
 		unlock_page(page);
+		printk(KERN_EMERG "1 cached %d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 		return page;
 	}
 
@@ -1192,7 +1193,65 @@ out_writepage:
 	f2fs_put_dnode(&dn);
 	return err;
 }
+int do_write_data_page_gc(struct f2fs_io_info *fio)
+{
+	struct page *page = fio->page;
+	struct inode *inode = page->mapping->host;
+	struct dnode_of_data dn;
+	int err = 0;
 
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	err = get_dnode_of_data(&dn, page->index, LOOKUP_NODE);
+	if (err)
+		return err;
+
+	fio->blk_addr = dn.data_blkaddr;
+	int is_original = 0;
+	printk(KERN_EMERG "%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+	/* This page is already truncated */
+	if (fio->blk_addr == NULL_ADDR) {
+		ClearPageUptodate(page);
+		goto out_writepage;
+	}
+
+	if (f2fs_encrypted_inode(inode) && S_ISREG(inode->i_mode)) {
+
+		/* wait for GCed encrypted page writeback */
+		f2fs_wait_on_encrypted_page_writeback(F2FS_I_SB(inode),
+							fio->blk_addr);
+
+		fio->encrypted_page = f2fs_encrypt(inode, fio->page);
+		if (IS_ERR(fio->encrypted_page)) {
+			err = PTR_ERR(fio->encrypted_page);
+			goto out_writepage;
+		}
+	}
+
+	set_page_writeback(page);
+
+	/*
+	 * If current allocation needs SSR,
+	 * it had better in-place writes for updated data.
+	 */
+	if (unlikely(fio->blk_addr != NEW_ADDR &&
+			!is_cold_data(page) &&
+			need_inplace_update(inode))) {
+		rewrite_data_page(fio);
+		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
+		trace_f2fs_do_write_data_page(page, IPU);
+	} else {
+		write_data_page(&dn, fio);
+		set_data_blkaddr(&dn);
+		f2fs_update_extent_cache(&dn);
+		trace_f2fs_do_write_data_page(page, OPU);
+		set_inode_flag(F2FS_I(inode), FI_APPEND_WRITE);
+		if (page->index == 0)
+			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
+	}
+out_writepage:
+	f2fs_put_dnode(&dn);
+	return err;
+}
 static int f2fs_write_data_page(struct page *page,
 					struct writeback_control *wbc)
 {

@@ -1072,7 +1072,7 @@ void ra_node_page(struct f2fs_sb_info *sbi, nid_t nid)
 	if (!apage)
 		return;
 
-	err = read_node_page_gc(apage, READA);
+	err = read_node_page(apage, READA);
 	f2fs_put_page(apage, err ? 1 : 0);
 }
 void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
