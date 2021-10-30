@@ -1288,7 +1288,7 @@ void allocate_data_block(struct f2fs_sb_info *sbi, struct page *page,
 	mutex_unlock(&curseg->curseg_mutex);
 }
 
-static void do_write_page(struct f2fs_summary *sum, struct f2fs_io_info *fio)
+static void do_write_page(struct f2fs_summary *sum, struct f2fs_io_info *fio) // This time is really to write page back.
 {
 	int type = __get_segment_type(fio->page, fio->type);
 
@@ -1332,7 +1332,7 @@ void write_data_page(struct dnode_of_data *dn, struct f2fs_io_info *fio)
 	struct node_info ni;
 
 	f2fs_bug_on(sbi, dn->data_blkaddr == NULL_ADDR);
-	get_node_info(sbi, dn->nid, &ni);
+	get_node_info(sbi, dn->nid, &ni); // get node information in struct ni.
 	set_summary(&sum, dn->nid, dn->ofs_in_node, ni.version);
 	do_write_page(&sum, fio);
 	dn->data_blkaddr = fio->blk_addr;

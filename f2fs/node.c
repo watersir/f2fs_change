@@ -195,7 +195,7 @@ static unsigned int __gang_lookup_nat_set(struct f2fs_nm_info *nm_i,
 							start, nr);
 }
 
-int need_dentry_mark(struct f2fs_sb_info *sbi, nid_t nid)
+int need_dentry_mark(struct f2fs_sb_info *sbi, nid_t nid) // Neet to do what?
 {
 	struct f2fs_nm_info *nm_i = NM_I(sbi);
 	struct nat_entry *e;
@@ -350,6 +350,7 @@ int try_to_free_nats(struct f2fs_sb_info *sbi, int nr_shrink)
 
 /*
  * This function always returns success
+ * Function: get nat entry from radix tree, the checkpoint cache or the nat page (perhaps in SSD).
  */
 void get_node_info(struct f2fs_sb_info *sbi, nid_t nid, struct node_info *ni)
 {
@@ -496,21 +497,21 @@ int get_dnode_of_data(struct dnode_of_data *dn, pgoff_t index, int mode)
 	int level, i;
 	int err = 0;
 
-	level = get_node_path(F2FS_I(dn->inode), index, offset, noffset);
+	level = get_node_path(F2FS_I(dn->inode), index, offset, noffset); // This function is used to get node level and path.
 
 	nids[0] = dn->inode->i_ino;
 	npage[0] = dn->inode_page;
 
 	if (!npage[0]) {
-		npage[0] = get_node_page(sbi, nids[0]);
+		npage[0] = get_node_page(sbi, nids[0]); // get node page whose nid = nids[0].
 		if (IS_ERR(npage[0]))
 			return PTR_ERR(npage[0]);
 	}
 
 	/* if inline_data is set, should not report any block indices */
-	if (f2fs_has_inline_data(dn->inode) && index) {
+	if (f2fs_has_inline_data(dn->inode) && index) { // inline data has flag !!!
 		err = -ENOENT;
-		f2fs_put_page(npage[0], 1);
+		f2fs_put_page(npage[0], 1); // What is the function for put page?
 		goto release_out;
 	}
 
@@ -1012,7 +1013,7 @@ static int read_node_page(struct page *page, int rw)
 		.page = page,
 		.encrypted_page = NULL,
 	};
-
+	// page->index means the nid.
 	get_node_info(sbi, page->index, &ni); // what is the relation ship between them?
 
 	if (unlikely(ni.blk_addr == NULL_ADDR)) {
@@ -1050,7 +1051,7 @@ static int read_node_page_gc(struct page *page, int rw)
 
 	fio.blk_addr = ni.blk_addr;
 	int is_original = 1;
-	printk(KERN_EMERG "%d %x\n",is_original,fio.blk_addr); 
+	printk(KERN_EMERG "bio:%d %x\n",is_original,fio.blk_addr); 
 	return f2fs_submit_page_bio(&fio);
 }
 /*
@@ -1072,7 +1073,7 @@ void ra_node_page(struct f2fs_sb_info *sbi, nid_t nid)
 	if (!apage)
 		return;
 
-	err = read_node_page(apage, READA);
+	err = read_node_page_gc(apage, READA);
 	f2fs_put_page(apage, err ? 1 : 0);
 }
 void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
@@ -1099,6 +1100,7 @@ struct page *get_node_page(struct f2fs_sb_info *sbi, pgoff_t nid)
 	struct page *page;
 	int err;
 repeat:
+	// This function will make page->index = nid.
 	page = grab_cache_page(NODE_MAPPING(sbi), nid); // root inode 对应的？
 	if (!page)
 		return ERR_PTR(-ENOMEM);

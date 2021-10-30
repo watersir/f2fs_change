@@ -324,8 +324,8 @@ got_it:
 	 * In such the case, its blkaddr can be remained as NEW_ADDR.
 	 * see, f2fs_add_link -> get_new_data_page -> init_inode_metadata.
 	 */
-	if (dn.data_blkaddr == NEW_ADDR) {
-		zero_user_segment(page, 0, PAGE_CACHE_SIZE);
+	if (dn.data_blkaddr == NEW_ADDR) { // This is new allocated page, but not be written.
+		zero_user_segment(page, 0, PAGE_CACHE_SIZE); // fill the page with zero?
 		SetPageUptodate(page);
 		unlock_page(page);
 		return page;
@@ -372,7 +372,7 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 	}
 
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
-	err = get_dnode_of_data(&dn, index, LOOKUP_NODE); // get the data_blkaddr of the block.
+	err = get_dnode_of_data(&dn, index, LOOKUP_NODE); // get the dnode of the original block.
 	if (err)
 		goto put_err;
 	f2fs_put_dnode(&dn);
@@ -382,9 +382,9 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 		goto put_err;
 	}
 got_it:
-	if (PageUptodate(page)) {
+	if (PageUptodate(page)) { // 查看页是不是最新的，比如预读机制就可能不是最新的
 		unlock_page(page);
-		printk(KERN_EMERG "1 cached %d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+		printk(KERN_EMERG "cached %d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 		return page;
 	}
 
@@ -394,7 +394,7 @@ got_it:
 	 * In such the case, its blkaddr can be remained as NEW_ADDR.
 	 * see, f2fs_add_link -> get_new_data_page -> init_inode_metadata.
 	 */
-	if (dn.data_blkaddr == NEW_ADDR) {
+	if (dn.data_blkaddr == NEW_ADDR) { // Truncated.
 		printk(KERN_EMERG "%d NEW_ADDR\n",is_original); 
 		zero_user_segment(page, 0, PAGE_CACHE_SIZE);
 		SetPageUptodate(page);
@@ -408,7 +408,7 @@ got_it:
 	if (err)
 		goto put_err;
 	// There will be, but don't know wheather is for GC.
-	printk(KERN_EMERG "%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+	printk(KERN_EMERG "bio:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 	return page;
 
 put_err:
@@ -473,7 +473,7 @@ struct page *get_lock_data_page_gc(struct inode *inode, pgoff_t index,
 	struct address_space *mapping = inode->i_mapping;
 	struct page *page;
 repeat:
-	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,1);
+	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,0);
 	if (IS_ERR(page))
 		return page;
 
@@ -1176,7 +1176,7 @@ int do_write_data_page(struct f2fs_io_info *fio)
 	 */
 	if (unlikely(fio->blk_addr != NEW_ADDR &&
 			!is_cold_data(page) &&
-			need_inplace_update(inode))) {
+			need_inplace_update(inode))) { // 就地更新判断
 		rewrite_data_page(fio);
 		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
 		trace_f2fs_do_write_data_page(page, IPU);
@@ -1201,13 +1201,11 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 	int err = 0;
 
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
-	err = get_dnode_of_data(&dn, page->index, LOOKUP_NODE);
+	err = get_dnode_of_data(&dn, page->index, LOOKUP_NODE); // Why don't allocate a new dnode?
 	if (err)
 		return err;
 
 	fio->blk_addr = dn.data_blkaddr;
-	int is_original = 0;
-	printk(KERN_EMERG "%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 	/* This page is already truncated */
 	if (fio->blk_addr == NULL_ADDR) {
 		ClearPageUptodate(page);
@@ -1239,6 +1237,8 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		rewrite_data_page(fio);
 		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
 		trace_f2fs_do_write_data_page(page, IPU);
+		int is_original = 0;
+		printk(KERN_EMERG "fio ip:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 	} else {
 		write_data_page(&dn, fio);
 		set_data_blkaddr(&dn);
@@ -1247,6 +1247,8 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		set_inode_flag(F2FS_I(inode), FI_APPEND_WRITE);
 		if (page->index == 0)
 			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
+		int is_original = 0;
+		printk(KERN_EMERG "fio op:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 	}
 out_writepage:
 	f2fs_put_dnode(&dn);

@@ -422,7 +422,11 @@ next_step:
 		if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0))
 			return 0;
 
-		if (check_valid_map(sbi, segno, off) == 0)
+		if (check_valid_map(sbi, segno, off) == 0){ // check if the block is valid.
+			printk(KERN_EMERG "i\n"); 
+			continue;
+		} else
+			printk(KERN_EMERG "v\n"); 
 			continue;
 
 		if (initial) {
@@ -448,7 +452,7 @@ next_step:
 
 		/* set page dirty and write it */
 		if (gc_type == FG_GC) {
-			f2fs_wait_on_page_writeback(node_page, NODE);
+			f2fs_wait_on_page_writeback(node_page, NODE); // Why wait for write back? What kind of pages to write back?
 			set_page_dirty(node_page); // This page is dirty.
 		} else {
 			if (!PageWriteback(node_page))
@@ -634,7 +638,7 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 		return;
 
 	if (gc_type == BG_GC) {
-		if (PageWriteback(page)) // Don't know what to do?
+		if (PageWriteback(page)) // 改页正在写回磁盘
 			goto out;
 		set_page_dirty(page);
 		set_cold_data(page); // Background GC will not write the page back immediately.
@@ -692,8 +696,11 @@ next_step:
 		if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0))
 			return 0;
 
-		if (check_valid_map(sbi, segno, off) == 0) // check if the block is valid.
+		if (check_valid_map(sbi, segno, off) == 0){ // check if the block is valid.
+			printk(KERN_EMERG "i\n"); 
 			continue;
+		} else
+			printk(KERN_EMERG "v\n"); 
 
 		if (phase == 0) {
 			ra_node_page(sbi, le32_to_cpu(entry->nid)); // read the node page of the moving block.
@@ -722,12 +729,13 @@ next_step:
 				add_gc_inode(gc_list, inode);
 				continue;
 			}
-
+			
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
 			// First, record the block number of the page.
+			printk(KERN_EMERG "read\n"); 
 			data_page = get_read_data_page_gc(inode, 
 					start_bidx + ofs_in_node, READA, true,1); // read the block in data_page.
-
+			printk(KERN_EMERG "read down.\n"); 
 			if (IS_ERR(data_page)) {
 				iput(inode); // The function is used to reduce the usage count of inode.
 				continue;
