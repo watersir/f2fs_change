@@ -394,3 +394,4 @@ static inline void set_mark(struct page *page, int mark, int type)
 }
 #define set_dentry_mark(page, mark)	set_mark(page, mark, DENT_BIT_SHIFT)
 #define set_fsync_mark(page, mark)	set_mark(page, mark, FSYNC_BIT_SHIFT)
+static int f2fs_write_node_page_gc(struct page *page, struct writeback_control *wbc);

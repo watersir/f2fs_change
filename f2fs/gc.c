@@ -484,7 +484,7 @@ next_step:
 			.nr_to_write = LONG_MAX,
 			.for_reclaim = 0,
 		};
-		sync_node_pages(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
+		sync_node_pages_gc(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
 
 		/* return 1 only if FG_GC succefully reclaimed one */
 		if (get_valid_blocks(sbi, segno, 1) == 0)
