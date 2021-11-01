@@ -1750,7 +1750,6 @@ struct page *get_node_page_ra(struct page *, int);
 void sync_inode_page(struct dnode_of_data *);
 int sync_node_pages(struct f2fs_sb_info *, nid_t, struct writeback_control *);
 int sync_node_pages_gc(struct f2fs_sb_info *, nid_t, struct writeback_control *);
-static int f2fs_write_node_page_gc(struct page *page, struct writeback_control *wbc);
 bool alloc_nid(struct f2fs_sb_info *, nid_t *);
 void alloc_nid_done(struct f2fs_sb_info *, nid_t);
 void alloc_nid_failed(struct f2fs_sb_info *, nid_t);
