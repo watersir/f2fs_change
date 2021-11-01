@@ -346,7 +346,7 @@ put_err:
 }
 struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 						int rw, bool for_write, int is_original) // The last one means the original or the new block_t.
-{
+{	// need to know wheather the page is in cache.
 	struct address_space *mapping = inode->i_mapping;
 	struct dnode_of_data dn;
 	struct page *page;
@@ -473,7 +473,7 @@ struct page *get_lock_data_page_gc(struct inode *inode, pgoff_t index,
 	struct address_space *mapping = inode->i_mapping;
 	struct page *page;
 repeat:
-	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,0);
+	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,1);
 	if (IS_ERR(page))
 		return page;
 
@@ -1238,7 +1238,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
 		trace_f2fs_do_write_data_page(page, IPU);
 		int is_original = 0;
-		printk(KERN_EMERG "fio ip:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+		printk(KERN_EMERG "fio ip:%d %x\n",is_original,dn.data_blkaddr); // inplace update.
 	} else {
 		write_data_page(&dn, fio);
 		set_data_blkaddr(&dn);
@@ -1248,7 +1248,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		if (page->index == 0)
 			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
 		int is_original = 0;
-		printk(KERN_EMERG "fio op:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+		printk(KERN_EMERG "fio op:%d %x\n",is_original,dn.data_blkaddr); // outplace update.
 	}
 out_writepage:
 	f2fs_put_dnode(&dn);

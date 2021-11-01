@@ -422,7 +422,7 @@ static int gc_node_segment(struct f2fs_sb_info *sbi,
 	int off;
 
 	start_addr = START_BLOCK(sbi, segno); // start logical block address.
-	printk(KERN_EMERG "in gc_node_segment, start_addr:%x,sbi->blocks_per_seg:%d\n",start_addr,sbi->blocks_per_seg); 
+	printk(KERN_EMERG "gc_node,sa:%x\n",start_addr); 
 next_step:
 	entry = sum;
 
@@ -436,11 +436,9 @@ next_step:
 			return 0;
 
 		if (check_valid_map(sbi, segno, off) == 0){ // check if the block is valid.
-			printk(KERN_EMERG "i\n"); 
 			continue;
 		} else
-			printk(KERN_EMERG "v\n"); 
-			continue;
+			printk(KERN_EMERG "%d\n",off); 
 
 		if (initial) {
 			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
@@ -694,7 +692,7 @@ static int gc_data_segment(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 	int phase = 0;
 
 	start_addr = START_BLOCK(sbi, segno);
-	printk(KERN_EMERG "in gc_data_segment, start_addr:%x,sbi->blocks_per_seg:%d\n",start_addr,sbi->blocks_per_seg); 
+	printk(KERN_EMERG "gc_data,sa:%x\n",start_addr); 
 next_step:
 	entry = sum;
 
@@ -709,11 +707,10 @@ next_step:
 		if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0))
 			return 0;
 
-		if (check_valid_map(sbi, segno, off) == 0){ // check if the block is valid.
-			printk(KERN_EMERG "i\n"); 
+		if (check_valid_map(sbi, segno, off) == 0) // check if the block is valid.
 			continue;
-		} else
-			printk(KERN_EMERG "v\n"); 
+		else
+			printk(KERN_EMERG "%d\n",off); 
 
 		if (phase == 0) {
 			ra_node_page(sbi, le32_to_cpu(entry->nid)); // read the node page of the moving block.
@@ -745,10 +742,8 @@ next_step:
 			
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
 			// First, record the block number of the page.
-			printk(KERN_EMERG "read\n"); 
 			data_page = get_read_data_page_gc(inode, 
 					start_bidx + ofs_in_node, READA, true,1); // read the block in data_page.
-			printk(KERN_EMERG "read down.\n"); 
 			if (IS_ERR(data_page)) {
 				iput(inode); // The function is used to reduce the usage count of inode.
 				continue;
