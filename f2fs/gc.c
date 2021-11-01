@@ -400,6 +400,19 @@ static int check_valid_map(struct f2fs_sb_info *sbi,
  * On validity, copy that node with cold status, otherwise (invalid node)
  * ignore that.
  */
+
+/*
+struct f2fs_summary { // a summary entry for a 4KB-sized block in a segment
+	__le32 nid;		// parent node id
+	union {
+		__u8 reserved[3];
+		struct {
+			__u8 version;		//node version number
+			__le16 ofs_in_node;	// block index in parent node
+		} __packed;
+	};
+} __packed;
+*/
 static int gc_node_segment(struct f2fs_sb_info *sbi,
 		struct f2fs_summary *sum, unsigned int segno, int gc_type)
 {
