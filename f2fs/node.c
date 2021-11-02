@@ -1048,7 +1048,7 @@ static int read_node_page_gc(struct page *page, int rw)
 	}
 
 	if (PageUptodate(page)){
-		printk(KERN_EMERG "LOCKED_PAGE\n"); 
+		printk(KERN_EMERG "LOCKED_PAGE\n"); // Always locked.
 		return LOCKED_PAGE;
 	} // The page is locked, which is possible.
 		
@@ -1088,7 +1088,7 @@ void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
 	apage = find_get_page(NODE_MAPPING(sbi), nid);
 	if (apage && PageUptodate(apage)) { // The page uptodate means in the cache. Because original data in ?
 		f2fs_put_page(apage, 0);
-		printk(KERN_EMERG "cached 1\n"); 
+		printk(KERN_EMERG "cached 1\n"); // Test shows that the node page is almost cached.
 		return;
 	}
 	f2fs_put_page(apage, 0);
@@ -1140,11 +1140,11 @@ repeat:
 
 	err = read_node_page_gc(page, READ_SYNC); // This function read node page.
 	if (err < 0) {
-		printk(KERN_EMERG "err < 0\n"); 
+//		printk(KERN_EMERG "err < 0\n"); 
 		f2fs_put_page(page, 1);
 		return ERR_PTR(err);
 	} else if (err != LOCKED_PAGE) {
-		printk(KERN_EMERG "err != LOCKED_PAGE\n"); 
+//		printk(KERN_EMERG "err != LOCKED_PAGE\n"); 
 		lock_page(page);
 	}
 
@@ -1157,7 +1157,6 @@ repeat:
 		f2fs_put_page(page, 1);
 		goto repeat;
 	}
-	printk(KERN_EMERG "return page\n"); 
 	return page;
 }
 /*

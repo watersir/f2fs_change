@@ -408,7 +408,7 @@ got_it:
 	if (err)
 		goto put_err;
 	// There will be, but don't know wheather is for GC.
-	// printk(KERN_EMERG "bio:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+	printk(KERN_EMERG "bio:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 	return page;
 
 put_err:
@@ -1239,7 +1239,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
 		trace_f2fs_do_write_data_page(page, IPU);
 		int is_original = 0;
-		// printk(KERN_EMERG "fio ip:%d %x\n",is_original,dn.data_blkaddr); // inplace update.
+		printk(KERN_EMERG "fio ip:%d %x\n",is_original,dn.data_blkaddr); // inplace update.
 	} else {
 		write_data_page(&dn, fio);
 		set_data_blkaddr(&dn);
@@ -1249,7 +1249,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		if (page->index == 0)
 			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
 		int is_original = 0;
-		// printk(KERN_EMERG "fio op:%d %x\n",is_original,dn.data_blkaddr); // outplace update.
+		printk(KERN_EMERG "fio op:%d %x\n",is_original,dn.data_blkaddr); // outplace update.
 	}
 out_writepage:
 	f2fs_put_dnode(&dn);
