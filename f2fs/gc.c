@@ -422,7 +422,7 @@ static int gc_node_segment(struct f2fs_sb_info *sbi,
 	int off;
 
 	start_addr = START_BLOCK(sbi, segno); // start logical block address.
-	printk(KERN_EMERG "gc_node:%x\n",start_addr); 
+	printk(KERN_EMERG "gc_node::%x\n",start_addr); 
 next_step:
 	entry = sum;
 
@@ -440,17 +440,15 @@ next_step:
 		} 
 
 		if (initial) {
-			printk(KERN_EMERG "%d\n",off); // Show how many nodes to read.
+			printk(KERN_EMERG "%d:",off); // Show how many nodes to read.
 			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
 			continue;
 		}
-		//
-		printk(KERN_EMERG "%d\n",off);
 		node_page = get_node_page_gc(sbi, nid); // This function or the ra_node_page is used to read page.
 		if (IS_ERR(node_page))
 			continue;
 		if(PageDirty(node_page)){
-			printk(KERN_EMERG "dirty\n"); 
+			printk(KERN_EMERG "2:%d\n",off); 
 		}
 		/* block may become invalid during get_node_page */
 		if (check_valid_map(sbi, segno, off) == 0) { // Why block may become invalid?
@@ -463,7 +461,6 @@ next_step:
 			f2fs_put_page(node_page, 1);
 			continue;
 		}
-		printk(KERN_EMERG "%x\n",ni.blk_addr);
 		/* set page dirty and write it */
 		if (gc_type == FG_GC) {
 			f2fs_wait_on_page_writeback(node_page, NODE); // Why wait for write back? What kind of pages to write back?
@@ -696,7 +693,7 @@ static int gc_data_segment(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 	int phase = 0;
 
 	start_addr = START_BLOCK(sbi, segno);
-	printk(KERN_EMERG "gc_data:%x\n",start_addr); 
+	printk(KERN_EMERG "gc_data::%x\n",start_addr); 
 next_step:
 	entry = sum;
 
@@ -744,15 +741,14 @@ next_step:
 			
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
 			// First, record the block number of the page.
-			printk(KERN_EMERG "%d\n",off); // In phase 2, print the valid block off. 
 			data_page = get_read_data_page_gc(inode, 
-					start_bidx + ofs_in_node, READA, true,1); // read the block in data_page.
+					start_bidx + ofs_in_node, READA, true,off); // read the block in data_page.
 			if (IS_ERR(data_page)) {
 				iput(inode); // The function is used to reduce the usage count of inode.
 				continue;
 			} 
 			if(PageDirty(data_page))
-				printk(KERN_EMERG "dty\n",off); // print wheater the page cached is dirty.
+				printk(KERN_EMERG "2:%d\n",off); // print wheater the page cached is dirty.
 
 			f2fs_put_page(data_page, 0); // What is the meaning of page cache release?
 			add_gc_inode(gc_list, inode);

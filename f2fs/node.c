@@ -1043,19 +1043,17 @@ static int read_node_page_gc(struct page *page, int rw)
 
 	if (unlikely(ni.blk_addr == NULL_ADDR)) {
 		ClearPageUptodate(page); // The page is dirty!
-		printk(KERN_EMERG "ni.blk_addr == NULL_ADDR\n"); 
 		return -ENOENT;
 	}
 
 	if (PageUptodate(page)){
-		printk(KERN_EMERG "LOCKED_PAGE\n"); // Always locked.
 		return LOCKED_PAGE;
 	} // The page is locked, which is possible.
 		
 
 	fio.blk_addr = ni.blk_addr;
 	int is_original = 1;
-	printk(KERN_EMERG "bio:%d %x\n",is_original,fio.blk_addr); 
+	printk(KERN_EMERG "0.\n"); 
 	return f2fs_submit_page_bio(&fio);
 }
 /*
@@ -1088,8 +1086,7 @@ void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
 	apage = find_get_page(NODE_MAPPING(sbi), nid);
 	if (apage && PageUptodate(apage)) { // The page uptodate means in the cache. Because original data in ?
 		f2fs_put_page(apage, 0);
-		printk(KERN_EMERG "cached 1\n"); // Test shows that the node page is almost cached.
-
+		printk(KERN_EMERG "4.\n"); // Test shows that the node page is almost cached.
 		return;
 	}
 	f2fs_put_page(apage, 0);
@@ -1277,10 +1274,10 @@ static int f2fs_write_node_page_gc(struct page *page,
 
 	set_page_writeback(page);
 	fio.blk_addr = ni.blk_addr;
+	block_t ori_addr = ni.blk_addr;
 	write_node_page(nid, &fio);
 	set_node_addr(sbi, &ni, fio.blk_addr, is_fsync_dnode(page));
-	int is_original = 0;
-	printk(KERN_EMERG "bio:%d %x\n",is_original,fio.blk_addr); 
+	printk(KERN_EMERG "3:%x %x\n",ori_addr,fio.blk_addr); 
 	dec_page_count(sbi, F2FS_DIRTY_NODES);
 	up_read(&sbi->node_write);
 	unlock_page(page);

@@ -345,7 +345,7 @@ put_err:
 	return ERR_PTR(err);
 }
 struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
-						int rw, bool for_write, int is_original) // The last one means the original or the new block_t.
+						int rw, bool for_write, int off) // The last one means the original or the new block_t.
 {	// need to know wheather the page is in cache.
 	struct address_space *mapping = inode->i_mapping;
 	struct dnode_of_data dn;
@@ -384,7 +384,7 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 got_it:
 	if (PageUptodate(page)) { // 查看页是不是最新的，比如预读机制就可能不是最新的
 		unlock_page(page);
-		printk(KERN_EMERG "cached %d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+		printk(KERN_EMERG "4:%d\n",off); // block_t is type defined by u32.
 		return page;
 	}
 
@@ -395,7 +395,7 @@ got_it:
 	 * see, f2fs_add_link -> get_new_data_page -> init_inode_metadata.
 	 */
 	if (dn.data_blkaddr == NEW_ADDR) { // Truncated.
-		printk(KERN_EMERG "%d NEW_ADDR\n",is_original); 
+		printk(KERN_EMERG "%d NEW_ADDR\n",off); 
 		zero_user_segment(page, 0, PAGE_CACHE_SIZE);
 		SetPageUptodate(page);
 		unlock_page(page);
@@ -408,7 +408,7 @@ got_it:
 	if (err)
 		goto put_err;
 	// There will be, but don't know wheather is for GC.
-	printk(KERN_EMERG "bio:%d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+	printk(KERN_EMERG "0:%d\n",off); // block_t is type defined by u32.
 	return page;
 
 put_err:
@@ -1207,6 +1207,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		return err;
 
 	fio->blk_addr = dn.data_blkaddr;
+	block_t ori_addr = dn.data_blkaddr;
 	/* This page is already truncated */
 	if (fio->blk_addr == NULL_ADDR) {
 		ClearPageUptodate(page);
@@ -1238,8 +1239,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		rewrite_data_page(fio);
 		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
 		trace_f2fs_do_write_data_page(page, IPU);
-		int is_original = 0;
-		printk(KERN_EMERG "fio ip:%d %x\n",is_original,dn.data_blkaddr); // inplace update.
+		printk(KERN_EMERG "3:%x %x\n",ori_addr,dn.data_blkaddr); // inplace update.
 	} else {
 		write_data_page(&dn, fio);
 		set_data_blkaddr(&dn);
@@ -1249,7 +1249,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		if (page->index == 0)
 			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
 		int is_original = 0;
-		printk(KERN_EMERG "fio op:%d %x\n",is_original,dn.data_blkaddr); // outplace update.
+		printk(KERN_EMERG "3:%x %x\n",ori_addr,dn.data_blkaddr); // outplace update.
 	}
 out_writepage:
 	f2fs_put_dnode(&dn);
