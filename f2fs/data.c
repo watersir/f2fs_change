@@ -384,7 +384,7 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 got_it:
 	if (PageUptodate(page)) { // 查看页是不是最新的，比如预读机制就可能不是最新的
 		unlock_page(page);
-		// printk(KERN_EMERG "cached %d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
+		printk(KERN_EMERG "cached %d %x\n",is_original,dn.data_blkaddr); // block_t is type defined by u32.
 		return page;
 	}
 

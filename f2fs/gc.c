@@ -445,11 +445,11 @@ next_step:
 			continue;
 		}
 		//
+		printk(KERN_EMERG "%d\n",off);
 		node_page = get_node_page_gc(sbi, nid); // This function or the ra_node_page is used to read page.
 		if (IS_ERR(node_page))
 			continue;
 		if(PageDirty(node_page)){
-			printk(KERN_EMERG "%d\n",off); 
 			printk(KERN_EMERG "dirty\n"); 
 		}
 		/* block may become invalid during get_node_page */
@@ -463,7 +463,7 @@ next_step:
 			f2fs_put_page(node_page, 1);
 			continue;
 		}
-
+		printk(KERN_EMERG "%x\n",ni.blk_addr);
 		/* set page dirty and write it */
 		if (gc_type == FG_GC) {
 			f2fs_wait_on_page_writeback(node_page, NODE); // Why wait for write back? What kind of pages to write back?

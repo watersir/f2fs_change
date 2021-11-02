@@ -1089,6 +1089,7 @@ void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
 	if (apage && PageUptodate(apage)) { // The page uptodate means in the cache. Because original data in ?
 		f2fs_put_page(apage, 0);
 		printk(KERN_EMERG "cached 1\n"); // Test shows that the node page is almost cached.
+
 		return;
 	}
 	f2fs_put_page(apage, 0);
