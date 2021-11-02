@@ -441,6 +441,7 @@ next_step:
 			printk(KERN_EMERG "%d\n",off); 
 
 		if (initial) {
+			
 			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
 			continue;
 		}
@@ -709,8 +710,6 @@ next_step:
 
 		if (check_valid_map(sbi, segno, off) == 0) // check if the block is valid.
 			continue;
-		else
-			printk(KERN_EMERG "%d\n",off); 
 
 		if (phase == 0) {
 			ra_node_page(sbi, le32_to_cpu(entry->nid)); // read the node page of the moving block.
@@ -742,6 +741,7 @@ next_step:
 			
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
 			// First, record the block number of the page.
+			// printk(KERN_EMERG "%d\n",off); // In phase 2, print the valid block off. 
 			data_page = get_read_data_page_gc(inode, 
 					start_bidx + ofs_in_node, READA, true,1); // read the block in data_page.
 			if (IS_ERR(data_page)) {

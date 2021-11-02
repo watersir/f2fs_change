@@ -1042,12 +1042,16 @@ static int read_node_page_gc(struct page *page, int rw)
 	get_node_info(sbi, page->index, &ni); // what is the relation ship between them?
 
 	if (unlikely(ni.blk_addr == NULL_ADDR)) {
-		ClearPageUptodate(page);
+		ClearPageUptodate(page); // The page is dirty!
+		printk(KERN_EMERG "ni.blk_addr == NULL_ADDR\n"); 
 		return -ENOENT;
 	}
 
-	if (PageUptodate(page))
+	if (PageUptodate(page)){
+		printk(KERN_EMERG "LOCKED_PAGE\n"); 
 		return LOCKED_PAGE;
+	} // The page is locked, which is possible.
+		
 
 	fio.blk_addr = ni.blk_addr;
 	int is_original = 1;
@@ -1082,8 +1086,9 @@ void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)
 	int err;
 
 	apage = find_get_page(NODE_MAPPING(sbi), nid);
-	if (apage && PageUptodate(apage)) {
+	if (apage && PageUptodate(apage)) { // The page uptodate means in the cache. Because original data in ?
 		f2fs_put_page(apage, 0);
+		printk(KERN_EMERG "cached 1\n"); 
 		return;
 	}
 	f2fs_put_page(apage, 0);
@@ -1135,9 +1140,11 @@ repeat:
 
 	err = read_node_page_gc(page, READ_SYNC); // This function read node page.
 	if (err < 0) {
+		printk(KERN_EMERG "err < 0\n"); 
 		f2fs_put_page(page, 1);
 		return ERR_PTR(err);
 	} else if (err != LOCKED_PAGE) {
+		printk(KERN_EMERG "err != LOCKED_PAGE\n"); 
 		lock_page(page);
 	}
 
@@ -1150,6 +1157,7 @@ repeat:
 		f2fs_put_page(page, 1);
 		goto repeat;
 	}
+	printk(KERN_EMERG "return page\n"); 
 	return page;
 }
 /*
