@@ -473,7 +473,8 @@ struct page *get_lock_data_page_gc(struct inode *inode, pgoff_t index,
 	struct address_space *mapping = inode->i_mapping;
 	struct page *page;
 repeat:
-	page = get_read_data_page(inode, index, READ_SYNC, for_write,1);
+	// page = get_read_data_page(inode, index, READ_SYNC, for_write,1);
+	page = get_read_data_page(inode, index, READ_SYNC, for_write);
 	if (IS_ERR(page))
 		return page;
 
