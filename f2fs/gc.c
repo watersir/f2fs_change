@@ -422,7 +422,7 @@ static int gc_node_segment(struct f2fs_sb_info *sbi,
 	int off;
 
 	start_addr = START_BLOCK(sbi, segno); // start logical block address.
-	printk(KERN_EMERG "gc_node::%x\n",start_addr); 
+	printk(KERN_EMERG "gc_node::%x\n",start_addr);  // start_addr means block number.
 next_step:
 	entry = sum;
 
