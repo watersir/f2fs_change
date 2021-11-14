@@ -413,6 +413,74 @@ struct f2fs_summary { // a summary entry for a 4KB-sized block in a segment
 	};
 } __packed;
 */
+/*
+ * @ Aim to know the situation of the SSD when trigger GC.
+ * This function used to let the SSD known when to do clean.
+ * The only thing need to do is to tell the start and then end address 
+ * in this segment clean.
+ */
+#include <linux/fs.h>
+#include <linux/types.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdint.h>
+#define NVME_IOCTL_ADMIN_CMD	_IOWR('N', 0x41, struct nvme_admin_cmd)
+#define MAX_BA 1024*1024
+struct nvme_admin_cmd {
+	__u8	opcode;
+	__u8	flags;
+	__u16	rsvd1;
+	__u32	nsid;
+	__u32	cdw2;
+	__u32	cdw3;
+	__u64	metadata;
+	__u64	addr;
+	__u32	metadata_len;
+	__u32	data_len;
+	__u32	cdw10;
+	__u32	cdw11;
+	__u32	cdw12;
+	__u32	cdw13;
+	__u32	cdw14;
+	__u32	cdw15;
+	__u32	timeout_ms;
+	__u32	result;
+};
+#define SEARCH_KEYWORD 0x09
+int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e = 1,means end;
+
+	int err= open("/dev/nvme0n1",O_RDONLY);
+	if (err < 0) {
+		printk("Can't open nvme0n1.\n"); // Maybe I can read from /sys/... to get the nvme device.
+		return -1;
+	}
+	
+	__u32 feature_id = 0x11;
+    int   save = 0;
+
+    __u32 cdw10 = feature_id | (save ? 1 << 31 : 0);
+    	struct nvme_admin_cmd cmd = {
+		.opcode		= SEARCH_KEYWORD,
+		.nsid		= 0, //namespace
+		.cdw10		= cdw10,
+		.cdw11		= s_e, // value1
+		.cdw12		= lba, // value2
+		.addr		= (__u64)(uintptr_t) NULL,
+		.data_len	= 0,
+	};
+
+	int fd = err;
+	err = ioctl(fd, NVME_IOCTL_ADMIN_CMD, cmd);
+	if(err < 0){
+		printk("ioctl failed!\n");
+    	return -1;
+    }
+	return 0;
+}
+#define START_ADDR_GC 0
+#define END_ADDR_GC 0
+
 static int gc_node_segment(struct f2fs_sb_info *sbi,
 		struct f2fs_summary *sum, unsigned int segno, int gc_type)
 {
@@ -423,6 +491,7 @@ static int gc_node_segment(struct f2fs_sb_info *sbi,
 
 	start_addr = START_BLOCK(sbi, segno); // start logical block address.
 	printk(KERN_EMERG "gc_node::%x\n",start_addr);  // start_addr means block number.
+	sendtoSSD(start_addr, START_ADDR_GC); 
 next_step:
 	entry = sum;
 
@@ -488,9 +557,12 @@ next_step:
 		sync_node_pages_gc(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
 
 		/* return 1 only if FG_GC succefully reclaimed one */
-		if (get_valid_blocks(sbi, segno, 1) == 0)
+		if (get_valid_blocks(sbi, segno, 1) == 0) {
+			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 			return 1;
+		}	
 	}
+	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 	return 0;
 }
 
@@ -694,6 +766,7 @@ static int gc_data_segment(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 
 	start_addr = START_BLOCK(sbi, segno);
 	printk(KERN_EMERG "gc_data::%x\n",start_addr); 
+	sendtoSSD(start_addr, START_ADDR_GC); 
 next_step:
 	entry = sum;
 
@@ -775,9 +848,12 @@ next_step:
 		f2fs_submit_merged_bio(sbi, DATA, WRITE);
 
 		/* return 1 only if FG_GC succefully reclaimed one */
-		if (get_valid_blocks(sbi, segno, 1) == 0)
+		if (get_valid_blocks(sbi, segno, 1) == 0){
+			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 			return 1;
+		}	
 	}
+	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 	return 0;
 }
 
