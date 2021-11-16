@@ -1053,7 +1053,7 @@ static int read_node_page_gc(struct page *page, int rw)
 
 	fio.blk_addr = ni.blk_addr;
 	int is_original = 1;
-	printk(KERN_EMERG "0.\n"); 
+//	printk(KERN_EMERG "0.\n"); 
 	return f2fs_submit_page_bio(&fio);
 }
 /*
@@ -1277,7 +1277,7 @@ static int f2fs_write_node_page_gc(struct page *page,
 	block_t ori_addr = ni.blk_addr;
 	write_node_page(nid, &fio);
 	set_node_addr(sbi, &ni, fio.blk_addr, is_fsync_dnode(page));
-	printk(KERN_EMERG "3:%x %x\n",ori_addr,fio.blk_addr); 
+//	printk(KERN_EMERG "3:%x %x\n",ori_addr,fio.blk_addr); 
 	dec_page_count(sbi, F2FS_DIRTY_NODES);
 	up_read(&sbi->node_write);
 	unlock_page(page);

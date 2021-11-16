@@ -384,7 +384,7 @@ struct page *get_read_data_page_gc(struct inode *inode, pgoff_t index,
 got_it:
 	if (PageUptodate(page)) { // 查看页是不是最新的，比如预读机制就可能不是最新的
 		unlock_page(page);
-		printk(KERN_EMERG "4:%d\n",off); // block_t is type defined by u32.
+//		printk(KERN_EMERG "4:%d\n",off); // block_t is type defined by u32.
 		return page;
 	}
 
@@ -1249,7 +1249,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		if (page->index == 0)
 			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
 		int is_original = 0;
-		printk(KERN_EMERG "3:%x %x\n",ori_addr,dn.data_blkaddr); // outplace update.
+//		printk(KERN_EMERG "3:%x %x\n",ori_addr,dn.data_blkaddr); // outplace update.
 	}
 out_writepage:
 	f2fs_put_dnode(&dn);

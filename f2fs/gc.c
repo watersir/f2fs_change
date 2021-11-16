@@ -419,64 +419,47 @@ struct f2fs_summary { // a summary entry for a 4KB-sized block in a segment
  * The only thing need to do is to tell the start and then end address 
  * in this segment clean.
  */
-#include <linux/fs.h>
 #include <linux/types.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdint.h>
-#define NVME_IOCTL_ADMIN_CMD	_IOWR('N', 0x41, struct nvme_admin_cmd)
-#define MAX_BA 1024*1024
-struct nvme_admin_cmd {
-	__u8	opcode;
-	__u8	flags;
-	__u16	rsvd1;
-	__u32	nsid;
-	__u32	cdw2;
-	__u32	cdw3;
-	__u64	metadata;
-	__u64	addr;
-	__u32	metadata_len;
-	__u32	data_len;
-	__u32	cdw10;
-	__u32	cdw11;
-	__u32	cdw12;
-	__u32	cdw13;
-	__u32	cdw14;
-	__u32	cdw15;
-	__u32	timeout_ms;
-	__u32	result;
-};
+#include "/home/willow/fxl/linux-4.4.4/drivers/nvme/host/nvme.h"
 #define SEARCH_KEYWORD 0x09
 int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e = 1,means end;
 
-	int err= open("/dev/nvme0n1",O_RDONLY);
-	if (err < 0) {
-		printk("Can't open nvme0n1.\n"); // Maybe I can read from /sys/... to get the nvme device.
+    struct file *filp = NULL;
+    mm_segment_t oldfs;
+    int err = 0;
+
+    oldfs = get_fs();
+    set_fs(get_ds());
+    filp = filp_open("/dev/nvme0n1", O_RDONLY, 0);
+    set_fs(oldfs);
+    if (IS_ERR(filp)) {
+        err = PTR_ERR(filp);
+	printk("Unable to open stats file to write\n");
+        return -1;
+    } else {
+		printk("*private_data:%x\n",filp->private_data);
+		printk("filp->inode.i_ino:%lx\n",(filp->f_inode)->i_ino);
+		printk("filp->inode.i_bdev:%lx\n",(filp->f_inode)->i_bdev);
+		struct nvme_ns *ns = filp->f_inode->i_bdev->bd_disk->private_data;
+		printk("filp->inode.dev:%lx\n",ns->dev);
+	}
+	struct nvme_ns *ns = filp->f_inode->i_bdev->bd_disk->private_data;
+	u32 result;
+	int err2;
+	int count = 20;
+	u32 q_count = (count - 1) | ((count - 1) << 16);
+	err2 = nvme_set_features(ns->dev, 0x07, q_count, 0, result);
+    filp_close(filp, NULL);
+	printk("err2:%d\n",err2);
+	printk("result:%d\n",result);
+	int ret = min(result & 0xffff,result >> 16) + 1;
+	if(ret>=0){
+		printk("ioctl success!\n");	
+		return 0;
+	} else {
+		printk("ioctl failed!\n");
 		return -1;
 	}
-	
-	__u32 feature_id = 0x11;
-    int   save = 0;
-
-    __u32 cdw10 = feature_id | (save ? 1 << 31 : 0);
-    	struct nvme_admin_cmd cmd = {
-		.opcode		= SEARCH_KEYWORD,
-		.nsid		= 0, //namespace
-		.cdw10		= cdw10,
-		.cdw11		= s_e, // value1
-		.cdw12		= lba, // value2
-		.addr		= (__u64)(uintptr_t) NULL,
-		.data_len	= 0,
-	};
-
-	int fd = err;
-	err = ioctl(fd, NVME_IOCTL_ADMIN_CMD, cmd);
-	if(err < 0){
-		printk("ioctl failed!\n");
-    	return -1;
-    }
-	return 0;
 }
 #define START_ADDR_GC 0
 #define END_ADDR_GC 0
@@ -516,9 +499,9 @@ next_step:
 		node_page = get_node_page_gc(sbi, nid); // This function or the ra_node_page is used to read page.
 		if (IS_ERR(node_page))
 			continue;
-		if(PageDirty(node_page)){
+/*		if(PageDirty(node_page)){
 			printk(KERN_EMERG "2:%d\n",off); 
-		}
+		}*/
 		/* block may become invalid during get_node_page */
 		if (check_valid_map(sbi, segno, off) == 0) { // Why block may become invalid?
 			f2fs_put_page(node_page, 1);
@@ -820,8 +803,8 @@ next_step:
 				iput(inode); // The function is used to reduce the usage count of inode.
 				continue;
 			} 
-			if(PageDirty(data_page))
-				printk(KERN_EMERG "2:%d\n",off); // print wheater the page cached is dirty.
+		/*	if(PageDirty(data_page))
+				printk(KERN_EMERG "2:%d\n",off); */// print wheater the page cached is dirty.
 
 			f2fs_put_page(data_page, 0); // What is the meaning of page cache release?
 			add_gc_inode(gc_list, inode);
