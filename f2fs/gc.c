@@ -448,7 +448,7 @@ int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e =
 	int err2;
 	int count = 20;
 	u32 q_count = (count - 1) | ((count - 1) << 16);
-	err2 = nvme_set_features(ns->dev, 0x07, q_count, 0, result);
+	err2 = nvme_set_features(ns->dev, 0x07, q_count, 0, &result);
     filp_close(filp, NULL);
 	printk("err2:%d\n",err2);
 	printk("result:%d\n",result);
