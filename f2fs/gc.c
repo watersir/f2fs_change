@@ -421,7 +421,7 @@ struct f2fs_summary { // a summary entry for a 4KB-sized block in a segment
  */
 #include <linux/types.h>
 #include "/home/willow/fxl/linux-4.4.4/drivers/nvme/host/nvme.h"
-#define SEARCH_KEYWORD 0x09
+extern int nvme_set_features(struct nvme_dev *dev, unsigned fid, unsigned dword11,dma_addr_t dma_addr, u32 *result);
 int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e = 1,means end;
 
     struct file *filp = NULL;
@@ -434,21 +434,19 @@ int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e =
     set_fs(oldfs);
     if (IS_ERR(filp)) {
         err = PTR_ERR(filp);
-	printk("Unable to open stats file to write\n");
+		printk("Unable to open stats file to write\n");
         return -1;
-    } else {
-		printk("*private_data:%x\n",filp->private_data);
-		printk("filp->inode.i_ino:%lx\n",(filp->f_inode)->i_ino);
-		printk("filp->inode.i_bdev:%lx\n",(filp->f_inode)->i_bdev);
-		struct nvme_ns *ns = filp->f_inode->i_bdev->bd_disk->private_data;
-		printk("filp->inode.dev:%lx\n",ns->dev);
-	}
+    }
 	struct nvme_ns *ns = filp->f_inode->i_bdev->bd_disk->private_data;
 	u32 result;
 	int err2;
 	int count = 20;
-	u32 q_count = (count - 1) | ((count - 1) << 16);
-	err2 = nvme_set_features(ns->dev, 0x07, q_count, 0, &result);
+	int opcode;
+    if(s_e) // end
+		opcode = 0x13;
+	else
+        opcode = 0x12;
+	err2 = nvme_set_features(ns->dev, opcode, lba, 0, &result);
     filp_close(filp, NULL);
 	printk("err2:%d\n",err2);
 	printk("result:%d\n",result);
@@ -492,7 +490,7 @@ next_step:
 		} 
 
 		if (initial) {
-			printk(KERN_EMERG "%d:",off); // Show how many nodes to read.
+//			printk(KERN_EMERG "%d:",off); // Show how many nodes to read.
 			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
 			continue;
 		}
@@ -536,7 +534,7 @@ next_step:
 			.nr_to_write = LONG_MAX,
 			.for_reclaim = 0,
 		};
-		printk(KERN_EMERG "FG_GC\n",off); 
+//		printk(KERN_EMERG "FG_GC\n",off); 
 		sync_node_pages_gc(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
 
 		/* return 1 only if FG_GC succefully reclaimed one */

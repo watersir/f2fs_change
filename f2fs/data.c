@@ -408,7 +408,7 @@ got_it:
 	if (err)
 		goto put_err;
 	// There will be, but don't know wheather is for GC.
-	printk(KERN_EMERG "0:%d\n",off); // block_t is type defined by u32.
+//	printk(KERN_EMERG "0:%d\n",off); // block_t is type defined by u32.
 	return page;
 
 put_err:
@@ -1239,7 +1239,7 @@ int do_write_data_page_gc(struct f2fs_io_info *fio)
 		rewrite_data_page(fio);
 		set_inode_flag(F2FS_I(inode), FI_UPDATE_WRITE);
 		trace_f2fs_do_write_data_page(page, IPU);
-		printk(KERN_EMERG "3:%x %x\n",ori_addr,dn.data_blkaddr); // inplace update.
+//		printk(KERN_EMERG "3:%x %x\n",ori_addr,dn.data_blkaddr); // inplace update.
 	} else {
 		write_data_page(&dn, fio);
 		set_data_blkaddr(&dn);
