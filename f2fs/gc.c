@@ -460,7 +460,7 @@ int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e =
 	}
 }
 #define START_ADDR_GC 0
-#define END_ADDR_GC 0
+#define END_ADDR_GC 1
 
 static int gc_node_segment(struct f2fs_sb_info *sbi,
 		struct f2fs_summary *sum, unsigned int segno, int gc_type)
@@ -854,6 +854,11 @@ static int __get_victim(struct f2fs_sb_info *sbi, unsigned int *victim,
 static int do_garbage_collect(struct f2fs_sb_info *sbi, unsigned int segno,
 				struct gc_inode_list *gc_list, int gc_type)
 {
+	if(gc_type==FG_GC) {
+		printk("FG_GC:--------\n");
+	} else {
+		printk("BG_GC:--------\n");
+	}
 	struct page *sum_page;
 	struct f2fs_summary_block *sum;
 	struct blk_plug plug;
@@ -894,7 +899,7 @@ static int do_garbage_collect(struct f2fs_sb_info *sbi, unsigned int segno,
 }
 
 int f2fs_gc(struct f2fs_sb_info *sbi, bool sync)
-{
+{	
 	unsigned int segno, i;
 	int gc_type = sync ? FG_GC : BG_GC;
 	int sec_freed = 0;
