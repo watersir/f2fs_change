@@ -274,7 +274,36 @@ int f2fs_get_block(struct dnode_of_data *dn, pgoff_t index)
 
 	return f2fs_reserve_block(dn, index);
 }
+/*
+	Date: 2021.11.23
+	Author: Willow
+	Function: 
+		Get the cached data page.
+		Or create a null page.
+		*** I will not read the page if the data is not aready in the page.
+		*** Wheather will be reclaimed?
+*/
+struct page *get_cached_data_page(struct inode *inode, pgoff_t index,int rw, bool for_write) {
+	// *** there is no encrypted information.
+	
+	struct address_space *mapping = inode->i_mapping;
+	struct dnode_of_data dn;
+	struct page *page;
+	struct extent_info ei;
 
+	page = f2fs_grab_cache_page(mapping, index, for_write);
+
+	if (!page)
+		return ERR_PTR(-ENOMEM);
+
+got_it:
+	if (PageUptodate(page)) {
+		unlock_page(page);
+		return page;
+	}
+
+	return page;
+}
 struct page *get_read_data_page(struct inode *inode, pgoff_t index,
 						int rw, bool for_write)
 {
@@ -302,7 +331,7 @@ struct page *get_read_data_page(struct inode *inode, pgoff_t index,
 		goto got_it;
 	}
 
-	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	set_new_dnode(&dn, inode, NULL, NULL, 0); // create a dnode.
 	err = get_dnode_of_data(&dn, index, LOOKUP_NODE); // This is to give a new dnode to original block.
 	if (err)
 		goto put_err;
@@ -451,7 +480,7 @@ struct page *get_lock_data_page(struct inode *inode, pgoff_t index,
 	struct address_space *mapping = inode->i_mapping;
 	struct page *page;
 repeat:
-	page = get_read_data_page_gc(inode, index, READ_SYNC, for_write,0);
+	page = get_read_data_page(inode, index, READ_SYNC, for_write,0);
 	if (IS_ERR(page))
 		return page;
 
@@ -1135,7 +1164,47 @@ static int f2fs_read_data_pages(struct file *file,
 
 	return f2fs_mpage_readpages(mapping, pages, NULL, nr_pages);
 }
+int do_remap_data_page(struct f2fs_io_info *fio) {
+	
+	struct page *page = fio->page;
+	struct inode *inode = page->mapping->host;
+	struct dnode_of_data dn;
+	int err = 0;
 
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	err = get_dnode_of_data(&dn, page->index, LOOKUP_NODE);
+	if (err)
+		return err;
+
+	fio->blk_addr = dn.data_blkaddr;
+
+	/* This page is already truncated */
+	if (fio->blk_addr == NULL_ADDR) {
+		ClearPageUptodate(page);
+		goto out_writepage;
+	}
+
+	if (f2fs_encrypted_inode(inode) && S_ISREG(inode->i_mode)) {
+		printk("erro:f2fs_encrypted_inode in do_remap_data_page.\n");
+	}
+
+	if (unlikely(fio->blk_addr != NEW_ADDR &&
+			!is_cold_data(page) &&
+			need_inplace_update(inode))) { // 就地更新判断
+			printk("erro: need inplace update.\n");
+	} else {
+		remap_data_page(&dn, fio); // remap data page, but do nothing.
+		set_data_blkaddr(&dn);  // write the node page of the remaped date page.
+		f2fs_update_extent_cache(&dn); // if the data page in the extent cache?
+		//trace_f2fs_do_write_data_page(page, OPU); don't wait for the page write back.
+		set_inode_flag(F2FS_I(inode), FI_APPEND_WRITE);
+		if (page->index == 0)
+			set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
+	}
+out_writepage:
+	f2fs_put_dnode(&dn);
+	return err;
+}
 int do_write_data_page(struct f2fs_io_info *fio)
 {
 	struct page *page = fio->page;

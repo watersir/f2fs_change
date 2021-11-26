@@ -1014,7 +1014,7 @@ static int read_node_page(struct page *page, int rw)
 		.encrypted_page = NULL,
 	};
 	// page->index means the nid.
-	get_node_info(sbi, page->index, &ni); // what is the relation ship between them?
+	get_node_info(sbi, page->index, &ni); // get the ni information. Not read the page.
 
 	if (unlikely(ni.blk_addr == NULL_ADDR)) {
 		ClearPageUptodate(page);
@@ -1025,7 +1025,7 @@ static int read_node_page(struct page *page, int rw)
 		return LOCKED_PAGE;
 
 	fio.blk_addr = ni.blk_addr;
-	return f2fs_submit_page_bio(&fio);
+	return f2fs_submit_page_bio(&fio); // read node page.
 }
 static int read_node_page_gc(struct page *page, int rw)
 {
@@ -1075,7 +1075,7 @@ void ra_node_page(struct f2fs_sb_info *sbi, nid_t nid)
 	if (!apage)
 		return;
 
-	err = read_node_page_gc(apage, READA);
+	err = read_node_page(apage, READA);
 	f2fs_put_page(apage, err ? 1 : 0);
 }
 void ra_node_page_gc(struct f2fs_sb_info *sbi, nid_t nid)

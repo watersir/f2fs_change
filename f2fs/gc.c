@@ -420,7 +420,7 @@ struct f2fs_summary { // a summary entry for a 4KB-sized block in a segment
  * in this segment clean.
  */
 #include <linux/types.h>
-#include "/home/willow/fxl/linux-4.4.4/drivers/nvme/host/nvme.h"
+//#include "/home/willow/fxl/linux-4.4.4/drivers/nvme/host/nvme.h"
 extern int nvme_set_features(struct nvme_dev *dev, unsigned fid, unsigned dword11,dma_addr_t dma_addr, u32 *result);
 int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e = 1,means end;
 
@@ -462,6 +462,89 @@ int sendtoSSD(unsigned int lba, unsigned int s_e){ // s_e = 0,means start; s_e =
 #define START_ADDR_GC 0
 #define END_ADDR_GC 1
 
+// static int gc_node_segment(struct f2fs_sb_info *sbi,
+// 		struct f2fs_summary *sum, unsigned int segno, int gc_type)
+// {
+// 	bool initial = true;
+// 	struct f2fs_summary *entry;
+// 	block_t start_addr;
+// 	int off;
+
+// 	start_addr = START_BLOCK(sbi, segno); // start logical block address.
+// 	printk(KERN_EMERG "gc_node::%x\n",start_addr);  // start_addr means block number.
+// next_step:
+// 	entry = sum;
+
+// 	for (off = 0; off < sbi->blocks_per_seg; off++, entry++) {
+// 		nid_t nid = le32_to_cpu(entry->nid); 
+// 		struct page *node_page;
+// 		struct node_info ni;
+
+// 		/* stop BG_GC if there is not enough free sections. */
+// 		if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0))
+// 			return 0;
+
+// 		if (check_valid_map(sbi, segno, off) == 0){ // check if the block is valid.
+// 			continue;
+// 		} 
+
+// 		if (initial) {
+// //			printk(KERN_EMERG "%d:",off); // Show how many nodes to read.
+// 			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
+// 			continue;
+// 		}
+// 		node_page = get_node_page_gc(sbi, nid); // This function or the ra_node_page is used to read page.
+// 		if (IS_ERR(node_page))
+// 			continue;
+// /*		if(PageDirty(node_page)){
+// 			printk(KERN_EMERG "2:%d\n",off); 
+// 		}*/
+// 		/* block may become invalid during get_node_page */
+// 		if (check_valid_map(sbi, segno, off) == 0) { // Why block may become invalid?
+// 			f2fs_put_page(node_page, 1); // minus the used page count.
+// 			continue;
+// 		}
+
+// 		get_node_info(sbi, nid, &ni); 
+// 		if (ni.blk_addr != start_addr + off) {
+// 			f2fs_put_page(node_page, 1);
+// 			continue;
+// 		}
+// 		/* set page dirty and write it */
+// 		if (gc_type == FG_GC) {
+// 			f2fs_wait_on_page_writeback(node_page, NODE); // Why wait for write back? What kind of pages to write back?
+// 			set_page_dirty(node_page); // This page is dirty.
+// 		} else {
+// 			if (!PageWriteback(node_page))
+// 				set_page_dirty(node_page);
+// 		}
+// 		f2fs_put_page(node_page, 1);
+// 		stat_inc_node_blk_count(sbi, 1, gc_type); // Incress block count for what? For background.
+// 	}
+
+// 	if (initial) {
+// 		initial = false;
+// 		goto next_step;
+// 	}
+
+// 	if (gc_type == FG_GC) {
+// 		struct writeback_control wbc = {
+// 			.sync_mode = WB_SYNC_ALL,
+// 			.nr_to_write = LONG_MAX,
+// 			.for_reclaim = 0,
+// 		};
+// //		printk(KERN_EMERG "FG_GC\n",off); 
+// 		sync_node_pages_gc(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
+
+// 		/* return 1 only if FG_GC succefully reclaimed one */
+// 		if (get_valid_blocks(sbi, segno, 1) == 0) {
+// 			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
+// 			return 1;
+// 		}	
+// 	}
+// 	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
+// 	return 0;
+// }
 static int gc_node_segment(struct f2fs_sb_info *sbi,
 		struct f2fs_summary *sum, unsigned int segno, int gc_type)
 {
@@ -472,7 +555,7 @@ static int gc_node_segment(struct f2fs_sb_info *sbi,
 
 	start_addr = START_BLOCK(sbi, segno); // start logical block address.
 	printk(KERN_EMERG "gc_node::%x\n",start_addr);  // start_addr means block number.
-	sendtoSSD(start_addr, START_ADDR_GC); 
+//	sendtoSSD(start_addr, START_ADDR_GC); 
 next_step:
 	entry = sum;
 
@@ -491,10 +574,10 @@ next_step:
 
 		if (initial) {
 //			printk(KERN_EMERG "%d:",off); // Show how many nodes to read.
-			ra_node_page_gc(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
+			ra_node_page(sbi, nid); // 将这个nid对应的node page读入到内存当中,因为有对应的逻辑地址。
 			continue;
 		}
-		node_page = get_node_page_gc(sbi, nid); // This function or the ra_node_page is used to read page.
+		node_page = get_node_page(sbi, nid); // This function or the ra_node_page is used to read page.
 		if (IS_ERR(node_page))
 			continue;
 /*		if(PageDirty(node_page)){
@@ -511,7 +594,7 @@ next_step:
 			f2fs_put_page(node_page, 1);
 			continue;
 		}
-		/* set page dirty and write it */
+		// set page dirty and write it 
 		if (gc_type == FG_GC) {
 			f2fs_wait_on_page_writeback(node_page, NODE); // Why wait for write back? What kind of pages to write back?
 			set_page_dirty(node_page); // This page is dirty.
@@ -535,18 +618,17 @@ next_step:
 			.for_reclaim = 0,
 		};
 //		printk(KERN_EMERG "FG_GC\n",off); 
-		sync_node_pages_gc(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
+		sync_node_pages(sbi, 0, &wbc); // 难道是刷下去的时候才有逻辑地址吗？
 
 		/* return 1 only if FG_GC succefully reclaimed one */
 		if (get_valid_blocks(sbi, segno, 1) == 0) {
-			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
+//			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 			return 1;
 		}	
 	}
-	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
+//	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 	return 0;
 }
-
 /*
  * Calculate start block index indicating the given node offset.
  * Be careful, caller should give this node offset only indicating direct node
@@ -693,12 +775,42 @@ put_out:
 out:
 	f2fs_put_page(page, 1);
 }
+static void remap_data_page(struct inode *inode, block_t bidx, int gc_type) { // 主要是修改相关的东西。
+	// write something.
+	struct page *page = fio->page;
+	struct inode *inode = page->mapping->host;
+	struct dnode_of_data dn;
+	int err = 0;
 
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	err = get_dnode_of_data(&dn, bidx, LOOKUP_NODE);
+	if (err)
+		return err;
+
+	/* This page is already truncated */
+	if (dn.data_blkaddr == NULL_ADDR) {
+		ClearPageUptodate(page);
+		goto out_writepage;
+	}
+
+	write_data_page(&dn, fio);
+	set_data_blkaddr(&dn);
+	f2fs_update_extent_cache(&dn);
+	trace_f2fs_do_write_data_page(page, OPU);
+	set_inode_flag(F2FS_I(inode), FI_APPEND_WRITE);
+	if (page->index == 0)
+		set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
+
+out_writepage:
+	f2fs_put_dnode(&dn);
+	return err;
+
+}
 static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 {
 	struct page *page;
 
-	page = get_lock_data_page_gc(inode, bidx, true); // This time to get the block_t of the index.
+	page = get_lock_data_page(inode, bidx, true); // This time to get the block_t of the index.
 	if (IS_ERR(page))
 		return;
 
@@ -720,7 +832,7 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 		if (clear_page_dirty_for_io(page))
 			inode_dec_dirty_pages(inode);
 		set_cold_data(page);
-		do_write_data_page_gc(&fio); // This time to write data page. Know the new logical address.
+		do_write_data_page(&fio); // This time to write data page. Know the new logical address.
 		clear_cold_data(page);
 	}
 	// get the bloct_t of the inode and the bidx.
@@ -728,7 +840,50 @@ static void move_data_page(struct inode *inode, block_t bidx, int gc_type)
 out:
 	f2fs_put_page(page, 1);
 }
+static void change_data_page(struct inode *inode, block_t bidx, int gc_type)
+{
+	struct page *page;
+	// change the code: get cached page.
+	page = get_cached_data_page(inode, 
+					start_bidx + ofs_in_node, READA, true,off);
+	/* wait for read completion */
+	lock_page(page);
+	if (unlikely(!PageUptodate(page))) {
+		f2fs_put_page(page, 1);
+		return;
+	}
+	if (unlikely(page->mapping != mapping)) {
+		f2fs_put_page(page, 1);
+		return;
+	}
+	//page = get_lock_data_page(inode, bidx, true); // This time to get the block_t of the index. 
+	if (IS_ERR(page))
+		return;
 
+	if (gc_type == BG_GC) {
+		if (PageWriteback(page)) //该页正在写回磁盘
+			goto out;
+		set_page_dirty(page);
+		set_cold_data(page); // Background GC will not write the page back immediately.
+	} else {
+		struct f2fs_io_info fio = {
+			.sbi = F2FS_I_SB(inode),
+			.type = DATA,
+			.rw = WRITE_SYNC,
+			.page = page,
+			.encrypted_page = NULL,
+		};
+		if (clear_page_dirty_for_io(page)) // What is the aim? Because this page is ready to write, so it is not dirty anymore?
+			inode_dec_dirty_pages(inode);  // decrease dirty pages?
+		set_cold_data(page);
+		do_remap_data_page(&fio);
+		clear_cold_data(page);
+	}
+	// get the bloct_t of the inode and the bidx.
+
+out:
+	f2fs_put_page(page, 1);
+}
 /*
  * This function tries to get parent node of victim data block, and identifies
  * data block validity. If the block is valid, copy that with cold status and
@@ -736,7 +891,142 @@ out:
  * If the parent node is not valid or the data block address is different,
  * the victim data block is ignored.
  */
+#define EFFICIENT 1
 static int gc_data_segment(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
+		struct gc_inode_list *gc_list, unsigned int segno, int gc_type)
+{
+	struct super_block *sb = sbi->sb;
+	struct f2fs_summary *entry;
+	block_t start_addr;
+	int off;
+	int phase = 0;
+	unsigned int ori_lba = 0;
+	unsigned int new_lba = 0;
+	unsigned int len = -1;
+
+	// get the bitmap of the segment. 512*32.
+	#ifdef EFFICIENT
+		int * array,i;
+        array = kzalloc(sizeof(int)*512,GFP_KERNEL);
+	#endif
+	start_addr = START_BLOCK(sbi, segno);
+	printk(KERN_EMERG "gc_data::%x\n",start_addr); 
+next_step:
+	entry = sum;
+
+	for (off = 0; off < sbi->blocks_per_seg; off++, entry++) {
+		struct page *data_page;
+		struct inode *inode;
+		struct node_info dni; /* dnode info for the data */
+		unsigned int ofs_in_node, nofs;
+		block_t start_bidx;
+
+		/* stop BG_GC if there is not enough free sections. */
+		if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0))
+			return 0;
+
+		if (check_valid_map(sbi, segno, off) == 0) // check if the block is valid.
+			continue;
+
+		if (phase == 0) {
+			ra_node_page(sbi, le32_to_cpu(entry->nid)); // read the node page of the moving block.
+			continue;
+		}
+
+		/* Get an inode by ino with checking validity */
+		if (!is_alive(sbi, entry, &dni, start_addr + off, &nofs)) // get ino number by reading NAT.
+			continue;
+
+		if (phase == 1) {
+			ra_node_page(sbi, dni.ino); // read the inode of the moving block.
+			continue;
+		}
+
+		ofs_in_node = le16_to_cpu(entry->ofs_in_node); // the offset in the dnode.
+
+		if (phase == 2) {
+			inode = f2fs_iget(sb, dni.ino); // get the inode(already in page cache) , which is in the cache. ???
+			if (IS_ERR(inode) || is_bad_inode(inode))
+				continue;
+
+			/* if encrypted（加密的） inode, let's go phase 3 */
+			if (f2fs_encrypted_inode(inode) &&
+						S_ISREG(inode->i_mode)) {
+				add_gc_inode(gc_list, inode);
+				continue;
+			}
+			
+			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode)); // 对应node block的start_bidx.
+			
+			
+			/*change : 1. judge the page in the page cache but clean or not in the cache. 2. judge the page is dirty.
+				1. just remap.
+				2. just move data.
+			*/
+			
+			data_page = get_cached_data_page(inode, 
+					start_bidx + ofs_in_node, READA, true,off); // read the block in data_page.
+			if (PageUptodate(data_page)) { // means data already in the page cache.
+				if(!PageDirty(data_page)){ // if page is not dirty.
+					printk("2\n");
+					array[off] = 2;
+				} else { // if page is dirty.
+					// 1. At first, I will remove the page. I think the overhead is the smallest.
+					// 2. Then, what need to do is syncing to the ssd. But I don't know how to sync.
+					#ifdef EFFICIENT
+						array[off] = 1;
+						// *** write the page back to the .
+					#endif
+					printk("1\n");
+				}
+			} else {
+				// page haven't read. add the remap table.
+				array[off] = 3;
+			}
+			if (IS_ERR(data_page)) { //#define IS_ERR_VALUE(x) unlikely((unsigned long)(void *)(x) >= (unsigned long)-MAX_ERRNO)
+				printk("erro:IS_ERR(data_page);\n");
+				iput(inode); // The function is used to reduce the usage count of inode.
+				continue;
+			} 
+
+			f2fs_put_page(data_page, 0); // 减少引用计数，前面函数grab_page_cache用到，所以这里手动释放。
+			add_gc_inode(gc_list, inode);
+			continue;
+		}
+
+		/* phase 3 */
+		inode = find_gc_inode(gc_list, dni.ino); // 因为GC需要inode，所以每次将inode暂存到radix tree中。
+		if (inode) {
+			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode))
+								+ ofs_in_node;
+			if (f2fs_encrypted_inode(inode) && S_ISREG(inode->i_mode))
+				move_encrypted_block(inode, start_bidx);
+			else{
+				
+				if(array[off]==1 || gc_type == BG_GC) // if set bit , means dirty page.
+					move_data_page(inode, start_bidx, gc_type); // write data to ?
+				else	
+					change_data_page(inode, start_bidx, gc_type); // write data to ?
+			}
+				
+			stat_inc_data_blk_count(sbi, 1, gc_type);
+		}
+	}
+
+	if (++phase < 4)
+		goto next_step;
+
+	if (gc_type == FG_GC) {
+		f2fs_submit_merged_bio(sbi, DATA, WRITE);
+
+		/* return 1 only if FG_GC succefully reclaimed one */
+		if (get_valid_blocks(sbi, segno, 1) == 0){
+			return 1;
+		}	
+	}
+	return 0;
+}
+static int gc_data_segment_FG(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 		struct gc_inode_list *gc_list, unsigned int segno, int gc_type)
 {
 	struct super_block *sb = sbi->sb;
@@ -747,7 +1037,7 @@ static int gc_data_segment(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 
 	start_addr = START_BLOCK(sbi, segno);
 	printk(KERN_EMERG "gc_data::%x\n",start_addr); 
-	sendtoSSD(start_addr, START_ADDR_GC); 
+//	sendtoSSD(start_addr, START_ADDR_GC); 
 next_step:
 	entry = sum;
 
@@ -795,7 +1085,7 @@ next_step:
 			
 			start_bidx = start_bidx_of_node(nofs, F2FS_I(inode));
 			// First, record the block number of the page.
-			data_page = get_read_data_page_gc(inode, 
+			data_page = get_read_data_page(inode, 
 					start_bidx + ofs_in_node, READA, true,off); // read the block in data_page.
 			if (IS_ERR(data_page)) {
 				iput(inode); // The function is used to reduce the usage count of inode.
@@ -830,14 +1120,13 @@ next_step:
 
 		/* return 1 only if FG_GC succefully reclaimed one */
 		if (get_valid_blocks(sbi, segno, 1) == 0){
-			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
+//			sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 			return 1;
 		}	
 	}
-	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
+//	sendtoSSD(start_addr+sbi->blocks_per_seg, END_ADDR_GC); 
 	return 0;
 }
-
 static int __get_victim(struct f2fs_sb_info *sbi, unsigned int *victim,
 			int gc_type)
 {
@@ -885,7 +1174,11 @@ static int do_garbage_collect(struct f2fs_sb_info *sbi, unsigned int segno,
 		nfree = gc_node_segment(sbi, sum->entries, segno, gc_type);
 		break;
 	case SUM_TYPE_DATA:
-		nfree = gc_data_segment(sbi, sum->entries, gc_list,
+		if(gc_type==FG_GC)
+			nfree = gc_data_segment_FG(sbi, sum->entries, gc_list,
+							segno, gc_type);
+		else
+			nfree = gc_data_segment(sbi, sum->entries, gc_list,
 							segno, gc_type);
 		break;
 	}

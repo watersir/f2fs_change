@@ -1028,7 +1028,7 @@ static void __refresh_next_blkoff(struct f2fs_sb_info *sbi,
 				struct curseg_info *seg)
 {
 	if (seg->alloc_type == SSR)
-		__next_free_blkoff(sbi, seg, seg->next_blkoff + 1);
+		__next_free_blkoff(sbi, seg, seg->next_blkoff + 1); // get the obsolete block because of lack of space.
 	else
 		seg->next_blkoff++;
 }
@@ -1259,30 +1259,30 @@ void allocate_data_block(struct f2fs_sb_info *sbi, struct page *page,
 				!has_not_enough_free_secs(sbi, 0))
 		__allocate_new_segments(sbi, type);
 
-	*new_blkaddr = NEXT_FREE_BLKADDR(sbi, curseg);
+	*new_blkaddr = NEXT_FREE_BLKADDR(sbi, curseg); // get the BLKADDR.
 
 	/*
 	 * __add_sum_entry should be resided under the curseg_mutex
 	 * because, this function updates a summary entry in the
 	 * current summary block.
 	 */
-	__add_sum_entry(sbi, type, sum);
+	__add_sum_entry(sbi, type, sum); // fill the summary entry of the new block address.
 
-	__refresh_next_blkoff(sbi, curseg);
+	__refresh_next_blkoff(sbi, curseg); // update next_blkoff, just add 1.
 
 	stat_inc_block_count(sbi, curseg);
 
 	if (!__has_curseg_space(sbi, type))
-		sit_i->s_ops->allocate_segment(sbi, type, false);
+		sit_i->s_ops->allocate_segment(sbi, type, false); // need allocate new segment.
 	/*
 	 * SIT information should be updated before segment allocation,
 	 * since SSR needs latest valid block information.
 	 */
-	refresh_sit_entry(sbi, old_blkaddr, *new_blkaddr);
+	refresh_sit_entry(sbi, old_blkaddr, *new_blkaddr); // set invalid of the old_blkaddr and ?
 
 	mutex_unlock(&sit_i->sentry_lock);
 
-	if (page && IS_NODESEG(type))
+	if (page && IS_NODESEG(type)) // If is node block, write the footer. Interesting.
 		fill_node_footer_blkaddr(page, NEXT_FREE_BLKADDR(sbi, curseg));
 
 	mutex_unlock(&curseg->curseg_mutex);
@@ -1290,7 +1290,7 @@ void allocate_data_block(struct f2fs_sb_info *sbi, struct page *page,
 
 static void do_write_page(struct f2fs_summary *sum, struct f2fs_io_info *fio) // This time is really to write page back.
 {
-	int type = __get_segment_type(fio->page, fio->type);
+	int type = __get_segment_type(fio->page, fio->type); // get type of hot/warm/cold and data/node.
 
 	allocate_data_block(fio->sbi, fio->page, fio->blk_addr,
 					&fio->blk_addr, sum, type);
@@ -1337,6 +1337,93 @@ void write_data_page(struct dnode_of_data *dn, struct f2fs_io_info *fio)
 	do_write_page(&sum, fio);
 	dn->data_blkaddr = fio->blk_addr;
 }
+// I don't think I should define the cmd there. 
+struct nvme_passthru_cmd {
+	__u8	opcode;
+	__u8	flags;
+	__u16	rsvd1;
+	__u32	nsid;
+	__u32	cdw2;
+	__u32	cdw3;
+	__u64	metadata;
+	__u64	addr;
+	__u32	metadata_len;
+	__u32	data_len;
+	__u32	cdw10;
+	__u32	cdw11;
+	__u32	cdw12;
+	__u32	cdw13;
+	__u32	cdw14;
+	__u32	cdw15;
+	__u32	timeout_ms;
+	__u32	result;
+};
+extern static int nvme_kernel_iocmd(struct block_dev *dev, struct nvme_passthru_cmd *ucmd);
+#define REMAP 0x93
+int remapSSD(unsigned int ori_lba,unsigned int new_lba,int len) {
+	
+	struct file *filp = NULL;
+    mm_segment_t oldfs;
+    int err = 0;
+
+    oldfs = get_fs();
+    set_fs(get_ds());
+    filp = filp_open("/dev/nvme0n1", O_RDONLY, 0);
+    set_fs(oldfs);
+    if (IS_ERR(filp)) {
+        err = PTR_ERR(filp);
+		printk("Unable to open stats file to write\n");
+        return -1;
+    }
+
+	struct nvme_ns *ns = filp->f_inode->i_bdev->bd_disk->private_data;
+	u32 result;
+	int err2;
+	int count = 20;
+	int opcode;
+	struct nvme_passthru_cmd cmd;
+	cmd = {
+		.opcode		= REMAP,
+		.nsid		= 0,
+		.cdw10		= ori_lba,
+		.cdw11		= new_lba,
+		.cdw12		= len,
+		.addr		= 0,
+		.data_len	= 0,
+	};
+	err2 = nvme_kernel_iocmd(struct nvme_ns *ns,struct nvme_passthru_cmd *cmd);
+    filp_close(filp, NULL);
+	result = cmd.result;
+	printk("err2:%d\n",err2);
+	printk("result:%d\n",result);
+	int ret = min(result & 0xffff,result >> 16) + 1;
+	if(ret>=0){
+		printk("remap success!\n");	
+		return 0;
+	} else {
+		printk("remap failed!\n"); 
+		return -1;
+	}
+}
+void remap_data_page(struct dnode_of_data *dn, struct f2fs_io_info *fio)
+{
+	struct f2fs_sb_info *sbi = fio->sbi;
+	struct f2fs_summary sum;
+	struct node_info ni;
+	int type;
+
+	f2fs_bug_on(sbi, dn->data_blkaddr == NULL_ADDR);
+	get_node_info(sbi, dn->nid, &ni); // get node information in struct ni.
+	set_summary(&sum, dn->nid, dn->ofs_in_node, ni.version);
+
+
+	type = __get_segment_type(fio->page, fio->type); // get type of hot/warm/cold and data/node.
+	allocate_data_block(fio->sbi, fio->page, fio->blk_addr,
+					&fio->blk_addr, sum, type);
+	remapSSD(dn->data_blkaddr,fio->blk_addr,1);
+	dn->data_blkaddr = fio->blk_addr;
+}
+
 
 void rewrite_data_page(struct f2fs_io_info *fio)
 {
@@ -1466,9 +1553,9 @@ static inline bool is_merged_page(struct f2fs_sb_info *sbi,
 }
 
 void f2fs_wait_on_page_writeback(struct page *page,
-				enum page_type type)
+				enum page_type type) // 为什么要写回磁盘？
 {
-	if (PageWriteback(page)) {
+	if (PageWriteback(page)) { //如果一个页设置了PageWriteback的标志,那么就等待,看什么时候这个位置写完
 		struct f2fs_sb_info *sbi = F2FS_P_SB(page);
 
 		if (is_merged_page(sbi, page, type))

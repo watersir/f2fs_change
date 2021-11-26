@@ -1846,6 +1846,7 @@ int reserve_new_block(struct dnode_of_data *);
 int f2fs_get_block(struct dnode_of_data *, pgoff_t);
 int f2fs_reserve_block(struct dnode_of_data *, pgoff_t);
 struct page *get_read_data_page(struct inode *, pgoff_t, int, bool);
+struct page *get_cached_data_page(struct inode *, pgoff_t, int, bool);
 struct page *get_read_data_page_gc(struct inode *, pgoff_t, int, bool, int);
 struct page *find_data_page(struct inode *, pgoff_t);
 struct page *get_lock_data_page(struct inode *, pgoff_t, bool);
