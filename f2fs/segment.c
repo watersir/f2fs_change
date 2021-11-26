@@ -1376,22 +1376,21 @@ int remapSSD(unsigned int ori_lba,unsigned int new_lba,int len) {
         return -1;
     }
 
-	struct nvme_ns *ns = filp->f_inode->i_bdev->bd_disk->private_data;
+	struct block_device *b_dev = filp->f_inode->i_bdev;
 	u32 result;
 	int err2;
 	int count = 20;
 	int opcode;
 	struct nvme_passthru_cmd cmd;
-	cmd = {
-		.opcode		= REMAP,
-		.nsid		= 0,
-		.cdw10		= ori_lba,
-		.cdw11		= new_lba,
-		.cdw12		= len,
-		.addr		= 0,
-		.data_len	= 0,
-	};
-	err2 = nvme_kernel_iocmd(struct nvme_ns *ns,struct nvme_passthru_cmd *cmd);
+
+	cmd.opcode = REMAP;
+	cmd.nsid = 1;
+	cmd.cdw10 = ori_lba;
+	cmd.cdw11 = new_lba;
+	cmd.cdw12 = len;
+	cmd.flags = 0; 
+
+	err2 = nvme_kernel_iocmd(b_dev,&cmd);
     filp_close(filp, NULL);
 	result = cmd.result;
 	printk("err2:%d\n",err2);
