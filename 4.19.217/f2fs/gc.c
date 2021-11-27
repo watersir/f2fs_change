@@ -1088,14 +1088,9 @@ next_step:
 			if (f2fs_post_read_required(inode)) // encrypted.
 				move_data_block(inode, start_bidx, gc_type,
 								segno, off);
-			else{
-				if(array[off]) // if set bit: in the page cache.
-					move_data_page(inode, start_bidx, gc_type,segno, off);
-				else
-					remap_data_page(inode, start_bidx, gc_type,segno, off)
-
-			}
-				
+			else
+				move_data_page(inode, start_bidx, gc_type,
+								segno, off);
 
 			if (locked) {
 				up_write(&fi->i_gc_rwsem[WRITE]);
@@ -1236,9 +1231,12 @@ next_step:
 			if (f2fs_post_read_required(inode))
 				move_data_block(inode, start_bidx, gc_type,
 								segno, off);
-			else
-				move_data_page(inode, start_bidx, gc_type,
-								segno, off);
+			else{
+				if(array[off]) // if set bit: in the page cache.
+					move_data_page(inode, start_bidx, gc_type,segno, off);
+				else
+					remap_data_page(inode, start_bidx, gc_type,segno, off);
+			}
 
 			if (locked) {
 				up_write(&fi->i_gc_rwsem[WRITE]);
