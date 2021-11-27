@@ -770,8 +770,7 @@ put_err:
 	f2fs_put_page(page, 1);
 	return ERR_PTR(err);
 }
-struct page *f2fs_get_cached_data_page(struct inode *inode, pgoff_t index,
-						int op_flags, bool for_write)
+struct page *f2fs_get_cached_data_page(struct inode *inode, pgoff_t index,bool for_write)
 {
 	struct address_space *mapping = inode->i_mapping;
 	struct dnode_of_data dn;
