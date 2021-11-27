@@ -770,7 +770,57 @@ put_err:
 	f2fs_put_page(page, 1);
 	return ERR_PTR(err);
 }
+struct page *f2fs_get_cached_data_page(struct inode *inode, pgoff_t index,
+						int op_flags, bool for_write)
+{
+	struct address_space *mapping = inode->i_mapping;
+	struct dnode_of_data dn;
+	struct page *page;
+	struct extent_info ei = {0,0,0};
+	int err;
 
+	page = f2fs_grab_cache_page(mapping, index, for_write);
+	if (!page)
+		return ERR_PTR(-ENOMEM);
+
+	if (f2fs_lookup_extent_cache(inode, index, &ei)) { // find wheather in extent tree.
+		dn.data_blkaddr = ei.blk + index - ei.fofs;
+		goto got_it;
+	}
+
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	err = f2fs_get_dnode_of_data(&dn, index, LOOKUP_NODE);
+	if (err)
+		goto put_err;
+	f2fs_put_dnode(&dn);
+
+	if (unlikely(dn.data_blkaddr == NULL_ADDR)) {
+		err = -ENOENT;
+		goto put_err;
+	}
+got_it:
+	if (PageUptodate(page)) {
+		unlock_page(page);
+		return page;
+	}
+
+	/*
+	 * A new dentry page is allocated but not able to be written, since its
+	 * new inode page couldn't be allocated due to -ENOSPC.
+	 * In such the case, its blkaddr can be remained as NEW_ADDR.
+	 * see, f2fs_add_link -> f2fs_get_new_data_page ->
+	 * f2fs_init_inode_metadata.
+	 */
+	if (dn.data_blkaddr == NEW_ADDR) {
+		zero_user_segment(page, 0, PAGE_SIZE);
+		if (!PageUptodate(page))
+			SetPageUptodate(page);
+		unlock_page(page);
+		return page;
+	}
+
+	return page;
+}
 struct page *f2fs_find_data_page(struct inode *inode, pgoff_t index)
 {
 	struct address_space *mapping = inode->i_mapping;
@@ -1831,6 +1881,98 @@ got_it:
 	if (err)
 		goto out_writepage;
 
+//	set_page_writeback(page);
+	ClearPageError(page);
+
+	/* LFS mode write path */
+	f2fs_outplace_remap_data(&dn, fio);
+	trace_f2fs_do_write_data_page(page, OPU);
+	set_inode_flag(inode, FI_APPEND_WRITE);
+	if (page->index == 0)
+		set_inode_flag(inode, FI_FIRST_BLOCK_WRITTEN);
+out_writepage:
+	f2fs_put_dnode(&dn);
+out:
+	if (fio->need_lock == LOCK_REQ)
+		f2fs_unlock_op(fio->sbi);
+	return err;
+}
+int f2fs_do_remap_data_page(struct f2fs_io_info *fio)
+{
+	struct page *page = fio->page;
+	struct inode *inode = page->mapping->host;
+	struct dnode_of_data dn;
+	struct extent_info ei = {0,0,0};
+	struct node_info ni;
+	bool ipu_force = false;
+	int err = 0;
+
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	if (need_inplace_update(fio) &&
+			f2fs_lookup_extent_cache(inode, page->index, &ei)) {
+		printk("inplace update 1.\n");
+		fio->old_blkaddr = ei.blk + page->index - ei.fofs;
+
+		if (!f2fs_is_valid_blkaddr(fio->sbi, fio->old_blkaddr,
+							DATA_GENERIC))
+			return -EFSCORRUPTED;
+
+		ipu_force = true;
+		fio->need_lock = LOCK_DONE;
+		goto got_it;
+	}
+
+	/* Deadlock due to between page->lock and f2fs_lock_op */
+	if (fio->need_lock == LOCK_REQ && !f2fs_trylock_op(fio->sbi))
+		return -EAGAIN;
+
+	err = f2fs_get_dnode_of_data(&dn, page->index, LOOKUP_NODE);
+	if (err)
+		goto out;
+
+	fio->old_blkaddr = dn.data_blkaddr;
+
+	/* This page is already truncated */
+	if (fio->old_blkaddr == NULL_ADDR) {
+		ClearPageUptodate(page);
+		clear_cold_data(page);
+		goto out_writepage;
+	}
+got_it:
+	if (__is_valid_data_blkaddr(fio->old_blkaddr) &&
+		!f2fs_is_valid_blkaddr(fio->sbi, fio->old_blkaddr,
+							DATA_GENERIC)) {
+		err = -EFSCORRUPTED;
+		goto out_writepage;
+	}
+	/*
+	 * If current allocation needs SSR,
+	 * it had better in-place writes for updated data.
+	 */
+	if (ipu_force || (is_valid_data_blkaddr(fio->sbi, fio->old_blkaddr) &&
+					need_inplace_update(fio))) {
+		printk("erro:inplace update 2.\n");
+		return 0;
+	}
+
+	if (fio->need_lock == LOCK_RETRY) {
+		if (!f2fs_trylock_op(fio->sbi)) {
+			err = -EAGAIN;
+			goto out_writepage;
+		}
+		fio->need_lock = LOCK_REQ;
+	}
+
+	err = f2fs_get_node_info(fio->sbi, dn.nid, &ni);
+	if (err)
+		goto out_writepage;
+
+	fio->version = ni.version;
+
+	err = encrypt_one_page(fio); // not encrypted file.
+	if (err)
+		goto out_writepage;
+
 	set_page_writeback(page);
 	ClearPageError(page);
 
@@ -1847,7 +1989,6 @@ out:
 		f2fs_unlock_op(fio->sbi);
 	return err;
 }
-
 static int __write_data_page(struct page *page, bool *submitted,
 				struct writeback_control *wbc,
 				enum iostat_type io_type)

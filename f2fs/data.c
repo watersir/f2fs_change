@@ -296,6 +296,11 @@ struct page *get_cached_data_page(struct inode *inode, pgoff_t index,int rw, boo
 	if (!page)
 		return ERR_PTR(-ENOMEM);
 
+	if (f2fs_lookup_extent_cache(inode, index, &ei)) {
+		dn.data_blkaddr = ei.blk + index - ei.fofs;
+		goto got_it;
+	}
+
 got_it:
 	if (PageUptodate(page)) {
 		unlock_page(page);

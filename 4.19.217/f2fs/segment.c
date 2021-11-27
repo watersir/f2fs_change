@@ -3019,6 +3019,93 @@ reallocate:
 		up_read(&fio->sbi->io_order_lock);
 }
 
+struct nvme_passthru_cmd {
+	__u8	opcode;
+	__u8	flags;
+	__u16	rsvd1;
+	__u32	nsid;
+	__u32	cdw2;
+	__u32	cdw3;
+	__u64	metadata;
+	__u64	addr;
+	__u32	metadata_len;
+	__u32	data_len;
+	__u32	cdw10;
+	__u32	cdw11;
+	__u32	cdw12;
+	__u32	cdw13;
+	__u32	cdw14;
+	__u32	cdw15;
+	__u32	timeout_ms;
+	__u32	result;
+};
+extern static int nvme_kernel_iocmd(struct block_dev *dev, struct nvme_passthru_cmd *ucmd);
+#define REMAP 0x93
+int remapSSD(unsigned int ori_lba,unsigned int new_lba,int len) {
+	
+	struct file *filp = NULL;
+    mm_segment_t oldfs;
+    int err = 0;
+
+    oldfs = get_fs();
+    set_fs(get_ds());
+    filp = filp_open("/dev/nvme0n1", O_RDONLY, 0);
+    set_fs(oldfs);
+    if (IS_ERR(filp)) {
+        err = PTR_ERR(filp);
+		printk("Unable to open stats file to write\n");
+        return -1;
+    }
+
+	struct block_device *b_dev = filp->f_inode->i_bdev;
+	u32 result;
+	int err2;
+	int count = 20;
+	int opcode;
+	struct nvme_passthru_cmd cmd;
+
+	cmd.opcode = REMAP;
+	cmd.nsid = 0;
+	cmd.cdw10 = ori_lba;
+	cmd.cdw11 = new_lba;
+	cmd.cdw12 = len;
+
+	err2 = nvme_kernel_iocmd(b_dev,&cmd);
+
+    filp_close(filp, NULL);
+	result = cmd.result;
+	printk("err2:%d\n",err2);
+	printk("result:%d\n",result);
+	int ret = min(result & 0xffff,result >> 16) + 1;
+	if(ret>=0){
+		printk("remap success!\n");	
+		return 0;
+	} else {
+		printk("remap failed!\n"); 
+		return -1;
+	}
+}
+static void do_remap_page(struct f2fs_summary *sum, struct f2fs_io_info *fio)
+{
+	int type = __get_segment_type(fio);
+	bool keep_order = (test_opt(fio->sbi, LFS) && type == CURSEG_COLD_DATA);
+
+	if (keep_order)
+		down_read(&fio->sbi->io_order_lock);
+reallocate:
+	f2fs_allocate_data_block(fio->sbi, fio->page, fio->old_blkaddr,
+			&fio->new_blkaddr, sum, type, fio, true);
+	if (GET_SEGNO(fio->sbi, fio->old_blkaddr) != NULL_SEGNO)
+		invalidate_mapping_pages(META_MAPPING(fio->sbi),
+					fio->old_blkaddr, fio->old_blkaddr);
+
+	/* writeout dirty page into bdev */
+	remapSSD(fio->old_blkaddr,fio->new_blkaddr,1);
+
+	update_device_state(fio);
+	if (keep_order)
+		up_read(&fio->sbi->io_order_lock);
+}
 void f2fs_do_write_meta_page(struct f2fs_sb_info *sbi, struct page *page,
 					enum iostat_type io_type)
 {
@@ -3068,7 +3155,19 @@ void f2fs_outplace_write_data(struct dnode_of_data *dn,
 
 	f2fs_update_iostat(sbi, fio->io_type, F2FS_BLKSIZE);
 }
+void f2fs_outplace_remap_data(struct dnode_of_data *dn,
+					struct f2fs_io_info *fio)
+{
+	struct f2fs_sb_info *sbi = fio->sbi;
+	struct f2fs_summary sum;
 
+	f2fs_bug_on(sbi, dn->data_blkaddr == NULL_ADDR);
+	set_summary(&sum, dn->nid, dn->ofs_in_node, fio->version);
+	do_remap_page(&sum, fio);
+	f2fs_update_data_blkaddr(dn, fio->new_blkaddr);
+
+	f2fs_update_iostat(sbi, fio->io_type, F2FS_BLKSIZE);
+}
 int f2fs_inplace_write_data(struct f2fs_io_info *fio)
 {
 	int err;
