@@ -817,8 +817,10 @@ got_it:
 		unlock_page(page);
 		return page;
 	}
-
 	return page;
+put_err:
+	f2fs_put_page(page, 1);
+	return ERR_PTR(err);
 }
 struct page *f2fs_find_data_page(struct inode *inode, pgoff_t index)
 {
