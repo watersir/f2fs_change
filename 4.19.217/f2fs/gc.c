@@ -897,7 +897,7 @@ static void remap_data_page(struct inode *inode, block_t bidx, int gc_type,
 {
 	struct page *page;
 
-	page = f2fs_get_cached_data_page(inode,bidx, REQ_RAHEAD, true);
+	page = f2fs_get_cached_data_page(inode,bidx, true);
 //	page = f2fs_get_lock_data_page(inode, bidx, true);
 	if (IS_ERR(page))
 		return;
@@ -1186,7 +1186,7 @@ next_step:
 			}
 
 			//data_page = f2fs_get_read_data_page(inode,start_bidx, REQ_RAHEAD, true);
-			data_page = f2fs_get_cached_data_page(inode,start_bidx, REQ_RAHEAD, true);
+			data_page = f2fs_get_cached_data_page(inode,start_bidx, true);
 			up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 			if (IS_ERR(data_page)) {
 				iput(inode);

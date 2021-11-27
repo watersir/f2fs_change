@@ -3064,7 +3064,7 @@ struct page *f2fs_get_read_data_page(struct inode *inode, pgoff_t index,
 struct page *f2fs_find_data_page(struct inode *inode, pgoff_t index);
 struct page *f2fs_get_lock_data_page(struct inode *inode, pgoff_t index,
 			bool for_write);
-struct page *f2fs_get_cached_data_page(inode,bidx, REQ_RAHEAD, true);
+struct page *f2fs_get_cached_data_page(inode,bidx,true);
 struct page *f2fs_get_new_data_page(struct inode *inode,
 			struct page *ipage, pgoff_t index, bool new_i_size);
 int f2fs_do_write_data_page(struct f2fs_io_info *fio);
