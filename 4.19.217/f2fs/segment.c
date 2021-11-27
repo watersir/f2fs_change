@@ -3039,7 +3039,7 @@ struct nvme_passthru_cmd {
 	__u32	timeout_ms;
 	__u32	result;
 };
-extern static int nvme_kernel_iocmd(struct block_device *dev, struct nvme_passthru_cmd *ucmd);
+extern int nvme_kernel_iocmd(struct block_device *dev, struct nvme_passthru_cmd *ucmd);
 #define REMAP 0x93
 int remapSSD(unsigned int ori_lba,unsigned int new_lba,int len) {
 	
