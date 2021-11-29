@@ -1757,11 +1757,11 @@ static inline bool check_inplace_update_policy(struct inode *inode,
 
 bool f2fs_should_update_inplace(struct inode *inode, struct f2fs_io_info *fio)
 {
-	if (f2fs_is_pinned_file(inode))
+	if (f2fs_is_pinned_file(inode)) // inline.
 		return true;
 
 	/* if this is cold file, we should overwrite to avoid fragmentation */
-	if (file_is_cold(inode))
+	if (file_is_cold(inode)) // first write will not be cold.
 		return true;
 
 	return check_inplace_update_policy(inode, fio);
@@ -1882,11 +1882,11 @@ got_it:
 	if (err)
 		goto out_writepage;
 
-//	set_page_writeback(page);
+	set_page_writeback(page);
 	ClearPageError(page);
 
 	/* LFS mode write path */
-	f2fs_outplace_remap_data(&dn, fio);
+	f2fs_outplace_write_data(&dn, fio);
 	trace_f2fs_do_write_data_page(page, OPU);
 	set_inode_flag(inode, FI_APPEND_WRITE);
 	if (page->index == 0)
@@ -1974,11 +1974,11 @@ got_it:
 	if (err)
 		goto out_writepage;
 
-	set_page_writeback(page);
+	//set_page_writeback(page);
 	ClearPageError(page);
 
 	/* LFS mode write path */
-	f2fs_outplace_write_data(&dn, fio);
+	f2fs_outplace_remap_data(&dn, fio);
 	trace_f2fs_do_write_data_page(page, OPU);
 	set_inode_flag(inode, FI_APPEND_WRITE);
 	if (page->index == 0)

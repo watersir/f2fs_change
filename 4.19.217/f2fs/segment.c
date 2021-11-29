@@ -3065,7 +3065,7 @@ int remapSSD(unsigned int ori_lba,unsigned int new_lba,int len) {
 	struct nvme_passthru_cmd cmd;
 
 	cmd.opcode = REMAP;
-	cmd.nsid = 0;
+	cmd.nsid = 1;
 	cmd.cdw10 = ori_lba;
 	cmd.cdw11 = new_lba;
 	cmd.cdw12 = len;
